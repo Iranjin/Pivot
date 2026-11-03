@@ -33,6 +33,10 @@ pub struct KeyMorphParams {
     pub fine: FloatParam,
     #[id = "glide"]
     pub glide: FloatParam,
+    #[id = "formant_shift"]
+    pub formant_shift: FloatParam,
+    #[id = "formant_preserve"]
+    pub formant_preserve: FloatParam,
     #[id = "mix"]
     pub mix: FloatParam,
     #[id = "input_gain"]
@@ -44,7 +48,7 @@ pub struct KeyMorphParams {
 impl Default for KeyMorphParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(560, 400),
+            editor_state: EguiState::from_size(560, 480),
             bypass: BoolParam::new("Bypass", false),
             quality: EnumParam::new("Quality", Quality::Balanced),
             transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })
@@ -70,6 +74,28 @@ impl Default for KeyMorphParams {
             )
             .with_step_size(1.0)
             .with_unit(" ms"),
+            formant_shift: FloatParam::new(
+                "Formant",
+                0.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            .with_smoother(SmoothingStyle::Linear(20.0))
+            .with_step_size(1.0)
+            .with_unit(" st"),
+            formant_preserve: FloatParam::new(
+                "Preserve",
+                100.0,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: 100.0,
+                },
+            )
+            .with_smoother(SmoothingStyle::Linear(20.0))
+            .with_step_size(1.0)
+            .with_unit(" %"),
             mix: FloatParam::new(
                 "Mix",
                 100.0,

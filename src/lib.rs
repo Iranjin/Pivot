@@ -86,7 +86,7 @@ impl Plugin for KeyMorph {
             },
             move |ctx, setter, _state| {
                 ResizableWindow::new("keymorph-ui")
-                    .min_size(Vec2::new(520.0, 360.0))
+                    .min_size(Vec2::new(520.0, 440.0))
                     .show(ctx, egui_state.as_ref(), |ui| {
                         ui.heading(egui::RichText::new("KeyMorph").size(22.0));
                         ui.label("Real-time pitch and key shifting");
@@ -124,6 +124,23 @@ impl Plugin for KeyMorph {
                                 ui.add(
                                     widgets::ParamSlider::for_param(&params.glide, setter)
                                         .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Formant");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.formant_shift, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Preserve");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(
+                                        &params.formant_preserve,
+                                        setter,
+                                    )
+                                    .with_width(260.0),
                                 );
                                 ui.end_row();
 
@@ -196,7 +213,7 @@ impl Plugin for KeyMorph {
 
         self.sample_rate = buffer_config.sample_rate;
 
-        let mut shifter = PitchShifter::new(channels);
+        let mut shifter = PitchShifter::new(channels, buffer_config.sample_rate);
         self.quality = self.params.quality.value();
         shifter.set_quality(self.quality);
         context.set_latency_samples(shifter.latency_samples());
@@ -246,6 +263,11 @@ impl Plugin for KeyMorph {
             self.pitch_semitones += (pitch_target - self.pitch_semitones) * glide_coefficient;
             let ratio = (self.pitch_semitones / 12.0).exp2();
 
+            let formant_shift = self.params.formant_shift.smoothed.next();
+            let formant_preserve = self.params.formant_preserve.smoothed.next() * 0.01;
+            let formant_ratio = (formant_shift / 12.0).exp2();
+            let envelope_warp = formant_ratio * ratio.powf(-formant_preserve);
+
             let input_gain = self.params.input_gain.smoothed.next();
             let output_gain = self.params.output_gain.smoothed.next();
             let mix = self.params.mix.smoothed.next() * 0.01;
@@ -264,7 +286,7 @@ impl Plugin for KeyMorph {
                 let input = *sample * input_gain;
 
                 *sample = if channel < shifter.channel_count() {
-                    let (wet, dry) = shifter.process_sample(channel, input, ratio);
+                    let (wet, dry) = shifter.process_sample(channel, input, ratio, envelope_warp);
                     (wet * wet_gain + dry * dry_gain) * output_gain
                 } else {
                     input * output_gain

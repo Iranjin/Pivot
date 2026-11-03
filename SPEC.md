@@ -126,19 +126,18 @@ density, harmonic structure) and switches its internal processing automatically.
 | Balanced | 2048 | Default; normal mixing work |
 | High | 4096 | Highest quality (checking before export) |
 
-- In strongly monophonic sections, combine pitch-synchronous processing to
+- In strongly monophonic sections, use pitch-synchronous harmonic phase locking to
   prioritize vocal naturalness
-- In polyphonic and mixed sections, rely mainly on the phase vocoder with phase
-  locking and transient protection
-- Crossfade internal path changes over 50 ms to prevent dropouts and clicks
+- In polyphonic and mixed sections, lock phases to spectral peaks
+- Switch locking modes with hysteresis based on a smoothed monophonicity estimate
 - Changing the quality preset changes latency, so report the new value to the host
 
 #### FR-5 Formant control
 
 - `Formant`: −12 to +12 semitones (shifts formants only)
 - `Formant Preserve`: 0–100% (100 = keep formant positions after pitch shifting)
-- Separate the spectral envelope (cepstrum) and restore the original envelope after
-  pitch shifting
+- Estimate the spectral envelope and pre-warp it so formants land at the requested
+  position after resampling
 - Use the same processing chain for monophonic, polyphonic, and mixed material
 - Formant shift operates independently of pitch shift
 
@@ -259,7 +258,9 @@ density, harmonic structure) and switches its internal processing automatically.
 | Low | 1024 | 21.3 ms | ≤ 22 ms |
 | Balanced | 2048 | 42.7 ms | ≤ 44 ms |
 | High | 4096 | 85.3 ms | ≤ 88 ms |
-| Low (with pitch-synchronous path on monophonic sections) | — | 10–15 ms | ≤ 15 ms |
+
+- The adaptive path does not change latency; every path uses the quality preset's
+  window size
 
 - CPU: Apple M1, 48 kHz / 128 samples, Balanced: ≤ 15% for one instance
   (relative to one core)
@@ -298,9 +299,9 @@ Input (stereo)
   ▼                                                   ▼
 ┌──────────────────────────────────────────────────────────┐
 │ Adaptive Pitch Shift Engine                               │
-│   ├─ Pitch-synchronous path (monophonic passages)         │
-│   └─ Phase vocoder path (polyphonic / mix)                │
-│        + phase locking + transient reset + formant        │
+│   ├─ Harmonic phase locking (monophonic passages)         │
+│   └─ Spectral-peak phase locking (polyphonic / mix)       │
+│        + formant envelope correction                      │
 └──────────────────────────────────────────────────────────┘
   │
   ├─ Formant Shift
@@ -327,18 +328,30 @@ Input (stereo)
 
 ### 6.3 Adaptive path (monophonic refinement)
 
-- Evaluate monophonicity every 50 ms
-  - Metrics: spectral flatness, harmonicity, F0 stability, stereo correlation
+- Evaluate monophonicity on every analysis frame
+  - Metrics: spectral flatness and harmonic energy ratio
+- Estimate F0 with a harmonic product spectrum (40–800 Hz, five harmonics)
 - For strongly monophonic sections:
-  - Estimate F0 with YIN / pYIN (frame 1024, hop 256, 40–1000 Hz)
-  - Detect pitch marks and stretch pitch with TD-PSOLA
-  - Implement scale snap by moving the target F0 toward scale notes
+  - Build phase-locking targets from the F0 harmonics instead of raw spectral peaks
+  - Keep the same phase vocoder and latency; only the locking targets change
 - For weakly monophonic sections:
-  - Use the phase vocoder from 6.2 as is
-- Crossfade the mix ratio of the two paths over 50 ms to avoid abrupt switches
+  - Use the spectral-peak locking from 6.2
+- Enable harmonic locking above 0.65 confidence and disable it below 0.45
 - Do not ask the user to choose a mode
 
-### 6.4 Latency management
+### 6.4 Formant control
+
+- Estimate the spectral envelope with a 1/6-octave moving average over the
+  magnitude spectrum
+- Pre-warp the envelope by `W = 2^(formant/12) * r^(-preserve)` in the stretched
+  domain, where `r` is the pitch ratio
+- Resampling by `r` then lands the formants at the requested position
+- Apply the ratio between the warped and original envelopes as a smooth gain curve
+  (clamped to ±12 dB) before the inverse STFT
+- `preserve = 0` lets formants follow the pitch shift; `preserve = 1` keeps them in
+  place
+
+### 6.5 Latency management
 
 - The engine always has a fixed algorithmic delay and reports it to the host via
   `set_latency_samples()`
@@ -348,7 +361,7 @@ Input (stereo)
   phase-aligned
 - Do not offer a zero-latency mode (prioritize quality)
 
-### 6.5 Key detection details
+### 6.6 Key detection details
 
 - Input: downmixed signal (L+R)/2
 - STFT: 4096 points, hop 2048, Hann window
@@ -442,7 +455,7 @@ Input (stereo)
 ### 8.4 Host integration
 
 - Report latency accurately
-- Tail: 200 ms (residue from STFT / PSOLA)
+- Tail: 200 ms (STFT residue)
 - Bypass passes audio through completely (and stops CPU work)
 - Reinitialize the engine on sample-rate changes
 - Offline rendering (higher quality) is planned for v1.1
@@ -615,6 +628,9 @@ cargo xtask bundle keymorph --release
 - Key detection: at least 90% correct on synthetic chords and real samples for all
   24 keys
 - FFT / iSTFT: resynthesis error below −120 dBFS
+- Formant control: a formant shift moves spectral energy in the expected direction
+- Monophonic detection: a sine is classified as monophonic and harmonic locking
+  engages
 - Latency: difference between reported and measured values within 1 sample, using
   an impulse response
 - State: all parameters match after save → load
@@ -654,7 +670,7 @@ cargo xtask bundle keymorph --release
 |---|---|---|
 | M0 | Project skeleton, VST3 / CLAP output, bypass + gain | 1 week |
 | M1 | Phase-vocoder pitch shift, parameters, latency reporting | 2–3 weeks |
-| M2 | Pitch-synchronous processing for monophonic sections, formant control | 2–3 weeks |
+| M2 | Pitch-synchronous harmonic locking, formant control | 2–3 weeks |
 | M3 | Key detection, key UI, scale snap | 2 weeks |
 | M4 | LFO / MIDI, presets, A/B, UI polish | 1–2 weeks |
 | M5 | Validation, optimization, signing / notarization, release | 1–2 weeks |
@@ -666,6 +682,8 @@ cargo xtask bundle keymorph --release
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Phase-vocoder quality (phasiness, transient smearing) | High | Phase locking, transient reset, comparative evaluation against Signalsmith |
+| F0 misdetection in monophonic passages | Medium | Confidence gating, hysteresis, fallback to spectral-peak locking |
+| Formant envelope warping artifacts | Medium | 1/6-octave smoothing, gain clamp, preset adjustment |
 | CPU load on mixed material | Medium | Quality presets, SIMD, band splitting, reduced update rates |
 | Relative-key misdetection (Am ↔ C) | Medium | Show confidence, allow manual override, tune smoothing |
 | Latency vs. quality trade-off | Medium | Make quality presets explicit, show measured values in the UI, no zero-latency mode |
@@ -697,5 +715,5 @@ cargo xtask bundle keymorph --release
 - VST3 SDK: https://github.com/steinbergmedia/vst3sdk
 - Signalsmith Stretch: https://github.com/Signalsmith-Audio/signalsmith-stretch
 - Krumhansl-Schmuckler key profiles: Krumhansl, C. L. (1990), *Cognitive Foundations of Musical Pitch*
-- TD-PSOLA: Moulines & Laroche (1995), *Non-parametric techniques for pitch-scale and time-scale modification of speech*
+- Harmonic product spectrum: Schroeder (1968), *Period histogram and product spectrum: New methods for fundamental-frequency measurement*
 - Phase vocoder: Laroche & Dolson (1999), *Improved phase vocoder time-scale modification of audio*
