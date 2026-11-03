@@ -183,7 +183,8 @@ Knob interaction:
 - Drag vertically for coarse pitch changes.
 - Shift-drag for cent-level changes.
 - Scroll for fine steps; Shift-scroll for finer steps.
-- Double-click to reset to 0.
+- Double-click to type a value directly; Enter commits and Escape cancels.
+- Entering `0` resets the pitch.
 
 #### UI requirements
 
@@ -197,7 +198,7 @@ Knob interaction:
 - Use `egui_glow` callbacks for shader-based rendering where useful
 - Support HiDPI and remain intact at 150% / 200% scaling
 - The knob shows the value inside and supports drag, Shift-drag, scroll, and
-  double-click reset
+  double-click text entry
 
 ---
 

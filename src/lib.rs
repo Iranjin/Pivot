@@ -6,7 +6,7 @@ use nih_plug_egui::{create_egui_editor, egui};
 
 use crate::dsp::{PitchAnalyzer, PitchEngine};
 use crate::params::{LfoShape, ModTarget, PivotParams, Quality, Scale};
-use crate::ui::pitch_knob;
+use crate::ui::{PitchKnobState, pitch_knob};
 
 mod dsp;
 mod params;
@@ -81,7 +81,7 @@ impl Plugin for Pivot {
 
         create_egui_editor(
             egui_state.clone(),
-            (),
+            PitchKnobState::default(),
             |ctx, _state| {
                 let mut style = (*ctx.style()).clone();
                 style.visuals = egui::Visuals::dark();
@@ -90,14 +90,14 @@ impl Plugin for Pivot {
                 style.spacing.item_spacing = egui::vec2(10.0, 8.0);
                 ctx.set_style(style);
             },
-            move |ctx, setter, _state| {
+            move |ctx, setter, state| {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     egui::Frame::NONE
                         .inner_margin(egui::Margin::same(20))
                         .show(ui, |ui| {
                             ui.heading(egui::RichText::new("Pivot").size(20.0));
                             ui.add_space(6.0);
-                            pitch_panel(ui, &params, setter);
+                            pitch_panel(ui, &params, setter, state);
                         });
                 });
             },
@@ -351,13 +351,18 @@ fn muted() -> egui::Color32 {
     egui::Color32::from_rgb(140, 146, 160)
 }
 
-fn pitch_panel(ui: &mut egui::Ui, params: &PivotParams, setter: &ParamSetter) {
+fn pitch_panel(
+    ui: &mut egui::Ui,
+    params: &PivotParams,
+    setter: &ParamSetter,
+    state: &mut PitchKnobState,
+) {
     ui.vertical_centered(|ui| {
         ui.label(egui::RichText::new("PITCH").small().color(muted()));
         ui.add_space(2.0);
 
         let mut pitch = params.pitch.value();
-        let response = pitch_knob(ui, &mut pitch);
+        let response = pitch_knob(ui, &mut pitch, state);
         if response.changed() {
             set_param(setter, &params.pitch, pitch);
         }

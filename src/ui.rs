@@ -2,6 +2,13 @@ use nih_plug_egui::egui::{
     self, Align2, Color32, FontId, Response, Sense, Shape, Stroke, Ui, Vec2,
 };
 
+#[derive(Default)]
+pub struct PitchKnobState {
+    editing: bool,
+    text: String,
+    focus_pending: bool,
+}
+
 const ACCENT: Color32 = Color32::from_rgb(96, 206, 245);
 const DIM: Color32 = Color32::from_rgb(46, 50, 62);
 const TRACK: Color32 = Color32::from_rgb(34, 37, 46);
@@ -10,7 +17,7 @@ const HUB: Color32 = Color32::from_rgb(13, 15, 20);
 const TEXT: Color32 = Color32::from_rgb(235, 238, 245);
 const MUTED: Color32 = Color32::from_rgb(140, 146, 160);
 
-pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
+pub fn pitch_knob(ui: &mut Ui, value: &mut f32, state: &mut PitchKnobState) -> Response {
     let size = ui.available_width().clamp(160.0, 380.0);
     let (rect, mut response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let center = rect.center();
@@ -80,13 +87,15 @@ pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
         painter.circle_filled(pointer_outer, 5.0, ACCENT);
 
         let display = if value.abs() < 0.005 { 0.0 } else { *value };
-        painter.text(
-            center + Vec2::new(0.0, -radius * 0.03),
-            Align2::CENTER_CENTER,
-            format!("{display:+.2}"),
-            FontId::proportional(radius * 0.26),
-            TEXT,
-        );
+        if !state.editing {
+            painter.text(
+                center + Vec2::new(0.0, -radius * 0.03),
+                Align2::CENTER_CENTER,
+                format!("{display:+.2}"),
+                FontId::proportional(radius * 0.26),
+                TEXT,
+            );
+        }
         painter.text(
             center + Vec2::new(0.0, radius * 0.17),
             Align2::CENTER_CENTER,
@@ -94,6 +103,57 @@ pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
             FontId::proportional((radius * 0.075).clamp(9.0, 13.0)),
             MUTED,
         );
+    }
+
+    if response.double_clicked() {
+        state.editing = true;
+        state.text = format!("{value:.2}");
+        state.focus_pending = true;
+    }
+
+    if state.editing {
+        let edit_rect = egui::Rect::from_center_size(
+            center,
+            Vec2::new((radius * 0.9).clamp(120.0, 280.0), 46.0),
+        );
+        let edit = ui.put(
+            edit_rect,
+            egui::TextEdit::singleline(&mut state.text)
+                .id(egui::Id::new("pivot-pitch-edit"))
+                .font(FontId::proportional((radius * 0.16).clamp(18.0, 34.0)))
+                .horizontal_align(egui::Align::Center)
+                .desired_width(edit_rect.width())
+                .margin(egui::Margin::symmetric(6, 4)),
+        );
+
+        if state.focus_pending {
+            edit.request_focus();
+            if let Some(mut text_state) = egui::TextEdit::load_state(ui.ctx(), edit.id) {
+                let end = egui::text::CCursor::new(state.text.chars().count());
+                text_state
+                    .cursor
+                    .set_char_range(Some(egui::text::CCursorRange::two(
+                        egui::text::CCursor::new(0),
+                        end,
+                    )));
+                text_state.store(ui.ctx(), edit.id);
+            }
+            state.focus_pending = false;
+        }
+
+        if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+            state.editing = false;
+            state.text.clear();
+        } else if edit.lost_focus() {
+            if let Some(parsed) = parse_pitch(&state.text) {
+                *value = parsed;
+                response.mark_changed();
+            }
+            state.editing = false;
+            state.text.clear();
+        }
+
+        return response.on_hover_cursor(egui::CursorIcon::Text);
     }
 
     if response.dragged() {
@@ -129,10 +189,35 @@ pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
     }
     ui.data_mut(|data| data.insert_temp(scroll_armed_id, scroll_armed));
 
-    if response.double_clicked() {
-        *value = 0.0;
-        response.mark_changed();
+    response.on_hover_cursor(egui::CursorIcon::ResizeVertical)
+}
+
+fn parse_pitch(text: &str) -> Option<f32> {
+    let normalized = text.trim().replace(',', ".");
+    let number = normalized.split_whitespace().next()?.trim_end_matches("st");
+    let value: f32 = number.parse().ok()?;
+
+    value
+        .is_finite()
+        .then(|| (value.clamp(-24.0, 24.0) * 100.0).round() / 100.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_direct_pitch_input() {
+        assert_eq!(parse_pitch("3.5"), Some(3.5));
+        assert_eq!(parse_pitch(" -2,5 st "), Some(-2.5));
+        assert_eq!(parse_pitch("+12"), Some(12.0));
     }
 
-    response.on_hover_cursor(egui::CursorIcon::ResizeVertical)
+    #[test]
+    fn clamps_direct_pitch_input() {
+        assert_eq!(parse_pitch("99"), Some(24.0));
+        assert_eq!(parse_pitch("-99"), Some(-24.0));
+        assert_eq!(parse_pitch("nope"), None);
+        assert_eq!(parse_pitch(""), None);
+    }
 }

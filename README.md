@@ -21,7 +21,8 @@ The plugin reports a fixed latency of 6720 samples (140 ms at 48 kHz).
 - Drag vertically for coarse changes.
 - Shift-drag for cent-level changes.
 - Scroll for fine steps; Shift-scroll for finer steps.
-- Double-click to reset to 0.
+- Double-click to type a value; Enter commits and Escape cancels.
+- Type `0` to reset to 0.
 
 The knob drives the single `Pitch` parameter (−24 to +24 semitones, 0.01 st
 steps). The host automates it as a normalized 0.0–1.0 value: 0.0 is −24 st,
