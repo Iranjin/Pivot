@@ -4,15 +4,14 @@ Real-time pitch and key shifting audio effect for macOS.
 
 ## Features
 
-- Large central pitch knob with continuous semitone and cent control
-- Focused main view with an Advanced section for secondary controls
-- Signalsmith Stretch pitch shift, ±24 semitones and ±100 cents
+- Large central pitch knob with 0.01-semitone resolution
+- Signalsmith Stretch pitch shift, ±24 semitones
 - Quality presets: cheaper, default, and high-quality configurations
 - Formant shift and preservation
-- Automatic key detection and key-based transposition
+- Manual key-based transposition
 - Scale snap for monophonic sources
 - LFO modulation and a safety limiter
-- A/B snapshots and versioned JSON presets
+- Single-knob custom UI; all other parameters are exposed to the host
 - VST3 and CLAP, universal binary (arm64 + x86_64)
 
 The plugin reports a fixed latency of 6720 samples (140 ms at 48 kHz).
@@ -24,7 +23,10 @@ The plugin reports a fixed latency of 6720 samples (140 ms at 48 kHz).
 - Scroll for fine steps; Shift-scroll for finer steps.
 - Double-click to reset to 0.
 
-The knob drives the Transpose and Fine parameters together.
+The knob drives the single `Pitch` parameter (−24 to +24 semitones, 0.01 st
+steps). The host automates it as a normalized 0.0–1.0 value: 0.0 is −24 st,
+0.5 is 0 st, and 1.0 is +24 st. All other parameters are available through the
+host's generic parameter list and automation.
 
 ## Build
 

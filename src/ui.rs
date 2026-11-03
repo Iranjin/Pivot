@@ -11,7 +11,7 @@ const TEXT: Color32 = Color32::from_rgb(235, 238, 245);
 const MUTED: Color32 = Color32::from_rgb(140, 146, 160);
 
 pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
-    let size = ui.available_width().clamp(160.0, 300.0);
+    let size = ui.available_width().clamp(160.0, 380.0);
     let (rect, mut response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let center = rect.center();
     let radius = size * 0.5;
@@ -109,9 +109,13 @@ pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
         }
     }
 
+    let scroll_armed_id = response.id.with("scroll_armed");
+    let mut scroll_armed = ui.data(|data| data.get_temp::<bool>(scroll_armed_id).unwrap_or(false));
     if response.hovered() {
         let scroll = ui.input(|input| input.raw_scroll_delta.y);
-        if scroll != 0.0 {
+        if scroll == 0.0 {
+            scroll_armed = true;
+        } else if scroll_armed {
             let sensitivity = if ui.input(|input| input.modifiers.shift) {
                 0.0005
             } else {
@@ -120,7 +124,10 @@ pub fn pitch_knob(ui: &mut Ui, value: &mut f32) -> Response {
             *value = (*value + scroll * sensitivity).clamp(-24.0, 24.0);
             response.mark_changed();
         }
+    } else {
+        scroll_armed = false;
     }
+    ui.data_mut(|data| data.insert_temp(scroll_armed_id, scroll_armed));
 
     if response.double_clicked() {
         *value = 0.0;

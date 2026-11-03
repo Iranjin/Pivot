@@ -18,7 +18,7 @@ Beyond simple semitone transposition, it handles all of the following in a singl
 plugin:
 
 - Continuous pitch shifting (semitones and cents)
-- Key detection and transposition from a source key to a target key
+- Manual key-based transposition from a source key to a target key
 - Pitch snapping to the notes of a scale
 - Morphing between keys (glide)
 - Pitch modulation via LFO and MIDI
@@ -43,15 +43,15 @@ As the name suggests, morphing the key is the core purpose.
 ### 2.1 In scope for v1.0
 
 - Stereo-in / stereo-out audio effect
-- Pitch shift (±24 semitones, ±100 cents)
+- Pitch shift (±24 semitones, 0.01 st resolution)
 - Single Signalsmith Stretch pitch-shift engine
-- Key detection (automatic / manual) and key-based transposition
+- Manual key-based transposition
 - Scale snap (most effective on monophonic and vocal sources)
 - Formant preservation / shift
 - Glide (morphing between keys)
 - LFO modulation
 - Dry/wet, input/output gain, safety limiter
-- Presets, A/B comparison, state persistence
+- Host state persistence
 - VST3 / CLAP bundles, macOS 12+ (Universal Binary)
 
 ### 2.2 Out of scope for v1.0 (future candidates)
@@ -61,7 +61,6 @@ As the name suggests, morphing the key is the core purpose.
 - Harmony generation (additional voices such as +3rd / +5th)
 - Full-mix processing that embeds stem separation
 - Windows / Linux support
-- Cloud preset sharing
 - AI-based timbre conversion
 
 ---
@@ -86,22 +85,19 @@ As the name suggests, morphing the key is the core purpose.
 
 #### FR-1 Manual pitch shift
 
-- `Transpose`: −24 to +24 semitones (integer steps, automation supported)
-- `Fine`: −100 to +100 cents (continuous)
-- Total shift = Transpose + Fine/100 (a float in semitones)
+- `Pitch`: −24 to +24 semitones in 0.01 st steps (automation supported)
+- Host automation is normalized 0.0–1.0, mapped linearly to −24..+24 st
 - Apply 20 ms smoothing to changes to prevent clicks
 - `Glide` sets the transition time for changes from 0 to 2000 ms
 
 #### FR-2 Key-based transposition
 
-- Set the input key to "automatic detection" or "manual"
-- Set the output key (Target Key)
+- Set the source key manually (root + mode)
+- Set the target key (root + mode)
 - Applied shift = Target Key − Source Key (in semitones)
   - Example: Source = A minor, Target = C minor → +3 semitones
 - Choose the shortest offset within ±6 semitones
-- If automatic detection is disabled or confidence is low, use the manual value
-- When automatic detection is active, show the detected key and confidence
-  (0–100%) in the UI
+- The key shift is added to the manual pitch amount
 
 #### FR-3 Scale snap (monophonic / vocal sources)
 
@@ -113,7 +109,6 @@ As the name suggests, morphing the key is the core purpose.
   Blues, Chromatic
 - In sections detected as polyphonic, fade the snap correction toward 0 based on
   the monophonicity confidence
-- Show "most effective on monophonic sources" in the UI
 
 #### FR-4 Single engine and quality presets
 
@@ -145,10 +140,10 @@ handles monophonic, polyphonic, and mixed material without a mode switch.
   - Depth: 0–12 semitones
   - Shape: Sine / Triangle / Square / Saw / Random
   - Phase: 0–360°
-  - Target: Transpose / Mix
+  - Target: Pitch / Mix
 - Automation
   - All primary parameters support host automation
-  - Transpose / Target Key are applied with sample accuracy
+  - Pitch / Target Key are applied with sample accuracy
 
 #### FR-7 Mix and gain
 
@@ -158,39 +153,30 @@ handles monophonic, polyphonic, and mixed material without a mode switch.
 - When pitch shift is 0 and Mix is 100%, guarantee bit-identical output to the dry
   path
 
-### 4.2 Key detection
+### 4.2 Pitch analysis
 
-- Downmix the stereo input to mono and compute chroma features from the STFT
-- Estimate tuning (A4 = 440 Hz ±50 cents) and correct the chroma
-- Score 24 keys (12 roots × Major/Minor) by correlation with
-  Krumhansl-Schmuckler profiles
-- Apply exponential chroma smoothing with about a 1 second time constant
-- Output: root (0–11), mode (Major / Minor), confidence (0–1)
+- Downmix the stereo input to mono
+- STFT: 4096 points, hop 2048, Hann window
+- F0: harmonic product spectrum (40–800 Hz, five harmonics) with parabolic
+  refinement
+- Monophonicity: spectral flatness and harmonic energy, smoothed over frames
 - Update rate: every 2048 samples (about 43 ms at 48 kHz)
-- During silence, hold the previous value and decay confidence
+- Used for scale snap only; there is no automatic key detection
 
-### 4.3 Presets / state
+### 4.3 State
 
-- Save presets as versioned JSON
 - Persist plugin state through the host (VST3 state / CLAP state)
-- Preset browser: save to and load from versioned JSON files
-- A/B comparison: store and recall two parameter sets
-- Undo: restore the previous snapshot before a preset recall or load (up to 100
-  entries)
-- Preset files carry a version field; unsupported versions are rejected with an
-  error
+- The custom UI exposes only the pitch knob; all other parameters are exposed
+  through the host's generic parameter list
+- No plugin-internal preset browser or A/B snapshots
 
 ### 4.4 UI
 
-#### Layout (760 × 520 px, resizable)
+#### Layout (460 × 520 px, fixed)
 
-- Main view: Key panel, a central pitch knob of up to 300 px, and a Quick panel
-  with Scale Snap, Mix, Glide, and Formant controls.
-- The knob readout is drawn inside the knob in semitones and cents.
-- Top bar: preset save and load, bypass, and latency.
-- Advanced (collapsed by default): Fine, Formant Shift, Retune, Scale, LFO,
-  Quality, Input/Output, Limiter, and A/B controls.
-- The control area scrolls when the window is smaller than the content.
+- Main view: title and one large pitch knob (up to 380 px).
+- No bypass, mix, latency, or advanced controls in the custom UI.
+- All other parameters are available through the host's generic parameter list.
 
 Knob interaction:
 
@@ -202,22 +188,16 @@ Knob interaction:
 #### UI requirements
 
 - Custom rendering with egui. Target 60 fps
-- The pitch knob is the primary control; it drives Transpose and Fine together
+- The pitch knob is the primary control and drives the single `Pitch` parameter
 - When the editor has focus, pass transport and other non-navigation keys to the
   host unless a text field is active
 - Do not use the default egui look; apply a custom theme (colors, corner radii,
   spacing, fonts)
-- Draw the keyboard, circle of fifths, meters, and knobs from scratch with
-  `Widget` implementations and `Painter`
-- Use `egui_glow` callbacks for shader-based rendering (glow, spectrum) where useful
+- Draw the pitch knob from scratch with a `Widget` implementation and `Painter`
+- Use `egui_glow` callbacks for shader-based rendering where useful
 - Support HiDPI and remain intact at 150% / 200% scaling
-- Highlight scale notes on the keyboard in two colors for Source and Target
-- Optional circle-of-fifths display
-- Double-click a value to type it directly
-- Right-click menu with "Reset" and "Assign to automation"
-- Keyboard operation: Tab to move focus, arrow keys for fine adjustment
-- Distinguish Source and Target by shape as well as color for color-vision
-  accessibility
+- The knob shows the value inside and supports drag, Shift-drag, scroll, and
+  double-click reset
 
 ---
 
@@ -320,24 +300,15 @@ Signalsmith Stretch (pitch + formant)
 - Pad the wet path of shorter presets and delay the dry path by the same amount
 - Do not offer a zero-latency mode
 
-### 6.6 Key detection details
+### 6.6 Pitch analysis details
 
 - Input: downmixed signal (L+R)/2
 - STFT: 4096 points, hop 2048, Hann window
-- Chroma: 12 bins accumulated from spectral peaks (55 Hz–5 kHz)
-- Refine peak frequencies with parabolic interpolation before mapping them to pitch
-  classes
-- Tuning: estimate the A4 offset from the strongest low-frequency peak (±50 cents)
-  and compensate the chroma mapping
 - F0: harmonic product spectrum (40–800 Hz, five harmonics) with parabolic
   refinement
 - Monophonicity: spectral flatness and harmonic energy, smoothed over frames
-- Key scoring: Pearson correlation against Krumhansl-Kessler Major / Minor profiles
-  for all 24 keys
-- Smoothing: exponential chroma smoothing (about 1 second time constant)
 - Update rate: every 2048 samples (about 43 ms at 48 kHz)
-- Output confidence: blend of the best correlation and its margin over the
-  second-best score
+- Used for scale snap only
 
 ---
 
@@ -358,8 +329,7 @@ Signalsmith Stretch (pitch + formant)
 
 | ID | Display | Range | Default | Unit | Smoothing | Notes |
 |---|---|---|---|---|---|---|
-| `transpose` | Transpose | −24 to +24 | 0 | st | 20 ms | Integer, sample-accurate |
-| `fine` | Fine | −100 to +100 | 0 | ct | 20 ms | Continuous |
+| `pitch` | Pitch | −24 to +24 | 0 | st | 20 ms | 0.01 st steps, sample-accurate |
 | `glide` | Glide | 0–2000 | 20 | ms | — | 0 = immediate |
 | `formant_shift` | Formant | −12 to +12 | 0 | st | 20 ms | — |
 | `formant_preserve` | Preserve | 0–100 | 100 | % | 20 ms | Most effective on monophonic sources |
@@ -368,9 +338,8 @@ Signalsmith Stretch (pitch + formant)
 
 | ID | Display | Range | Default | Unit | Notes |
 |---|---|---|---|---|---|
-| `source_auto` | Source Auto | ON/OFF | OFF | — | OFF = manual |
-| `source_root` | Source Root | C–B | C | — | Manual only |
-| `source_mode` | Source Mode | Major / Minor | Minor | — | Manual only |
+| `source_root` | Source Root | C–B | C | — | — |
+| `source_mode` | Source Mode | Major / Minor | Minor | — | — |
 | `target_root` | Target Root | C–B | C | — | — |
 | `target_mode` | Target Mode | Major / Minor | Minor | — | — |
 | `snap_amount` | Snap | 0–100 | 0 | % | Monophonic sources |
@@ -385,7 +354,7 @@ Signalsmith Stretch (pitch + formant)
 | `lfo_rate` | LFO Rate | 0.01–20 | 0.5 | Hz | — |
 | `lfo_depth` | LFO Depth | 0–12 | 0 | st | — |
 | `lfo_phase` | LFO Phase | 0–360 | 0 | ° | — |
-| `mod_target` | LFO Target | Transpose / Mix | Transpose | — | — |
+| `mod_target` | LFO Target | Pitch / Mix | Pitch | — | — |
 
 ---
 
@@ -413,9 +382,8 @@ Signalsmith Stretch (pitch + formant)
 ### 8.3 State
 
 - Expose all parameters to the host and allow automation
-- Serialize state as JSON (`serde`)
-- Include a version field for future migration
-- Include UI size and display settings in the state
+- State serialization is handled by nih-plug
+- The editor size is persisted with the plugin state
 
 ### 8.4 Host integration
 
@@ -479,8 +447,6 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 | `realfft` | Real FFT | MIT |
 | `num-complex` | Complex number types | MIT / Apache-2.0 |
 | `signalsmith-stretch` | Pitch/time engine | MIT |
-| `serde` / `serde_json` | State persistence | MIT / Apache-2.0 |
-| `rfd` | File dialogs (presets) | MIT |
 
 - The pitch shifter uses Signalsmith Stretch (MIT)
 - Build requires a C++ compiler and libclang (for bindgen)
@@ -495,19 +461,19 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 ```
 ┌──────────────┐    atomic params    ┌──────────────────┐
 │  UI thread   │ ──────────────────► │  Audio thread    │
-│  (egui)      │ ◄────────────────── │  (process)       │
-└──────────────┘   meters / key info └──────────────────┘
-        │                                     │
-        │ preset save/load                    │ lock-free queue
-        ▼                                     ▼
-┌──────────────┐                     ┌──────────────────┐
-│  Disk / Host │                     │  Worker thread   │
-│  state       │                     │  key detection   │
-└──────────────┘                     └──────────────────┘
+│  (egui)      │ ◄────────────────── │  (process +      │
+└──────────────┘   meters / latency  │   analysis)      │
+        │                             └──────────────────┘
+        │ preset save/load
+        ▼
+┌──────────────┐
+│  Disk / Host │
+│  state       │
+└──────────────┘
 ```
 
 - Share parameters through `AtomicFloat` / `AtomicEnum`
-- Offload key detection to a worker thread (pass audio through a ring buffer)
+- Run pitch analysis in the audio thread with preallocated buffers
 - Poll state from the UI at 30–60 fps (no locks)
 - On the audio thread, prohibit `Vec` reallocation, `Mutex`, and file I/O
 
@@ -576,8 +542,6 @@ cargo xtask bundle-universal keymorph --release
 ### 12.1 Unit tests
 
 - Pitch detection: within ±5 cents on a 40–1000 Hz sine sweep
-- Key detection: at least 90% correct on synthetic chords and real samples for all
-  24 keys
 - Scale snap: a detuned note is corrected to the nearest scale degree
 - FFT / iSTFT: covered by Signalsmith Stretch
 - Engine latency: impulse peak at the reported latency (±1 sample)
@@ -586,8 +550,7 @@ cargo xtask bundle-universal keymorph --release
 - Monophonic detection: a sine is classified as monophonic and reports its F0
 - Latency: difference between reported and measured values within 1 sample, using
   an impulse response; all quality presets report 6720 samples at 48 kHz
-- State: all parameters match after save → load
-- Presets: a captured snapshot round-trips through JSON without loss
+- State: all parameters match after host save → load
 - Parameter range: no divergence when feeding boundary values, NaN, and Inf into
   every parameter
 
@@ -621,7 +584,7 @@ cargo xtask bundle-universal keymorph --release
 ### 12.5 Acceptance criteria (v1.0)
 
 - [ ] Pitch shifting works on monophonic, polyphonic, and mixed material
-- [ ] Key detection and automatic transposition work
+- [ ] Manual key shift works
 - [ ] Scale snap works on monophonic sources
 - [ ] Latency is reported correctly
 - [ ] CPU stays within target
@@ -637,9 +600,9 @@ cargo xtask bundle-universal keymorph --release
 |---|---|---|
 | M0 | Project skeleton, VST3 / CLAP output, bypass + gain | 1 week |
 | M1 | Signalsmith Stretch integration, parameters, latency reporting | 2–3 weeks |
-| M2 | Formant mapping, key detection, scale snap | 2–3 weeks |
-| M3 | Key detection, key UI, scale snap | 2 weeks |
-| M4 | LFO, limiter, presets, A/B, UI polish | 1–2 weeks |
+| M2 | Formant mapping, pitch analysis, scale snap | 2–3 weeks |
+| M3 | Key UI, scale snap, LFO, limiter | 2 weeks |
+| M4 | LFO, limiter, UI polish | 1–2 weeks |
 | M5 | Validation, optimization, Universal Binary, signing / notarization, release | 1–2 weeks |
 
 ---
@@ -651,7 +614,6 @@ cargo xtask bundle-universal keymorph --release
 | F0 misdetection in monophonic passages | Medium | Confidence gating, smoothing, manual source key |
 | Formant artifacts at large shifts | Medium | Preserve slider, Signalsmith formant compensation |
 | CPU load on mixed material | Medium | Quality presets, High only when needed |
-| Relative-key misdetection (Am ↔ C) | Medium | Show confidence, allow manual override, tune smoothing |
 | Latency vs. quality trade-off | Medium | Fixed 140 ms reported latency at 48 kHz, host compensation, no zero-latency mode |
 | Build complexity from Signalsmith FFI | Low | Pinned crate, prebuilt buffers, CI build check |
 | Notarization / signing operational burden | Low | Automate in CI, manage certificates in Secrets |
@@ -671,7 +633,6 @@ cargo xtask bundle-universal keymorph --release
 - [ ] Visual tone of the UI (colors, fonts, texture)
 - [ ] Custom scale editor (per-note on/off)
 - [ ] MIDI pitch bend / CC modulation
-- [ ] Is cloud preset sharing needed?
 - [ ] How far to support Intel Macs (is a Universal Binary mandatory)?
 
 ---
@@ -683,5 +644,4 @@ cargo xtask bundle-universal keymorph --release
 - VST3 SDK: https://github.com/steinbergmedia/vst3sdk
 - Signalsmith Stretch: https://github.com/Signalsmith-Audio/signalsmith-stretch
 - Signalsmith Linear: https://github.com/Signalsmith-Audio/linear
-- Krumhansl-Schmuckler key profiles: Krumhansl, C. L. (1990), *Cognitive Foundations of Musical Pitch*
 - Harmonic product spectrum: Schroeder (1968), *Period histogram and product spectrum: New methods for fundamental-frequency measurement*

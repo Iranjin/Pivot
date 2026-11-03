@@ -1,32 +1,22 @@
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Quality {
     Low,
     Balanced,
     High,
 }
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KeyMode {
     #[default]
     Major,
     Minor,
 }
 
-impl KeyMode {
-    pub fn name(self) -> &'static str {
-        match self {
-            KeyMode::Major => "Major",
-            KeyMode::Minor => "Minor",
-        }
-    }
-}
-
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Scale {
     #[default]
     Major,
@@ -45,23 +35,6 @@ pub enum Scale {
 }
 
 impl Scale {
-    pub fn name(self) -> &'static str {
-        match self {
-            Scale::Major => "Major",
-            Scale::NaturalMinor => "Natural Minor",
-            Scale::HarmonicMinor => "Harmonic Minor",
-            Scale::MelodicMinor => "Melodic Minor",
-            Scale::Dorian => "Dorian",
-            Scale::Phrygian => "Phrygian",
-            Scale::Lydian => "Lydian",
-            Scale::Mixolydian => "Mixolydian",
-            Scale::Locrian => "Locrian",
-            Scale::MajorPentatonic => "Major Pentatonic",
-            Scale::MinorPentatonic => "Minor Pentatonic",
-            Scale::Blues => "Blues",
-            Scale::Chromatic => "Chromatic",
-        }
-    }
     pub fn mask(self) -> [bool; 12] {
         match self {
             Scale::Major => [
@@ -105,23 +78,7 @@ impl Scale {
     }
 }
 
-pub const SCALES: [Scale; 13] = [
-    Scale::Major,
-    Scale::NaturalMinor,
-    Scale::HarmonicMinor,
-    Scale::MelodicMinor,
-    Scale::Dorian,
-    Scale::Phrygian,
-    Scale::Lydian,
-    Scale::Mixolydian,
-    Scale::Locrian,
-    Scale::MajorPentatonic,
-    Scale::MinorPentatonic,
-    Scale::Blues,
-    Scale::Chromatic,
-];
-
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LfoShape {
     #[default]
     Sine,
@@ -131,46 +88,23 @@ pub enum LfoShape {
     Random,
 }
 
-impl LfoShape {
-    pub fn name(self) -> &'static str {
-        match self {
-            LfoShape::Sine => "Sine",
-            LfoShape::Triangle => "Triangle",
-            LfoShape::Square => "Square",
-            LfoShape::Saw => "Saw",
-            LfoShape::Random => "Random",
-        }
-    }
-}
-
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ModTarget {
     #[default]
     Transpose,
     Mix,
 }
 
-impl ModTarget {
-    pub fn name(self) -> &'static str {
-        match self {
-            ModTarget::Transpose => "Transpose",
-            ModTarget::Mix => "Mix",
-        }
-    }
-}
-
 #[derive(Params)]
 pub struct KeyMorphParams {
-    #[persist = "editor-state-v3"]
+    #[persist = "editor-state-v9"]
     pub editor_state: Arc<EguiState>,
     #[id = "bypass"]
     pub bypass: BoolParam,
     #[id = "quality"]
     pub quality: EnumParam<Quality>,
-    #[id = "transpose"]
-    pub transpose: IntParam,
-    #[id = "fine"]
-    pub fine: FloatParam,
+    #[id = "pitch"]
+    pub pitch: FloatParam,
     #[id = "glide"]
     pub glide: FloatParam,
     #[id = "formant_shift"]
@@ -187,8 +121,6 @@ pub struct KeyMorphParams {
     pub lfo_phase: FloatParam,
     #[id = "mod_target"]
     pub mod_target: EnumParam<ModTarget>,
-    #[id = "source_auto"]
-    pub source_auto: BoolParam,
     #[id = "source_root"]
     pub source_root: IntParam,
     #[id = "source_mode"]
@@ -216,23 +148,21 @@ pub struct KeyMorphParams {
 impl Default for KeyMorphParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(760, 520),
+            editor_state: EguiState::from_size(460, 520),
             bypass: BoolParam::new("Bypass", false),
             quality: EnumParam::new("Quality", Quality::High),
-            transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })
-                .with_unit(" st"),
-            fine: FloatParam::new(
-                "Fine",
+            pitch: FloatParam::new(
+                "Pitch",
                 0.0,
                 FloatRange::Linear {
-                    min: -100.0,
-                    max: 100.0,
+                    min: -24.0,
+                    max: 24.0,
                 },
             )
             .with_smoother(SmoothingStyle::Linear(20.0))
-            .with_step_size(1.0)
-            .with_unit(" ct")
-            .with_value_to_string(stepped_formatter(" ct"))
+            .with_step_size(0.01)
+            .with_unit(" st")
+            .with_value_to_string(Arc::new(pitch_formatter))
             .with_string_to_value(Arc::new(parse_float)),
             glide: FloatParam::new(
                 "Glide",
@@ -301,7 +231,6 @@ impl Default for KeyMorphParams {
             .with_step_size(1.0)
             .with_unit(" °"),
             mod_target: EnumParam::new("LFO Target", ModTarget::Transpose),
-            source_auto: BoolParam::new("Source Auto", false),
             source_root: IntParam::new("Source Root", 0, IntRange::Linear { min: 0, max: 11 }),
             source_mode: EnumParam::new("Source Mode", KeyMode::Minor),
             target_root: IntParam::new("Target Root", 0, IntRange::Linear { min: 0, max: 11 }),
@@ -359,6 +288,10 @@ fn stepped_formatter(unit: &'static str) -> Arc<dyn Fn(f32) -> String + Send + S
 
 fn parse_float(text: &str) -> Option<f32> {
     text.split_whitespace().next()?.parse().ok()
+}
+
+fn pitch_formatter(value: f32) -> String {
+    format!("{value:+.2} st")
 }
 
 fn gain_param(name: &'static str) -> FloatParam {

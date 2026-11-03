@@ -1,5 +1,5 @@
+mod analyzer;
 mod engine;
-mod key_detector;
 
+pub use analyzer::PitchAnalyzer;
 pub use engine::PitchEngine;
-pub use key_detector::KeyDetector;
