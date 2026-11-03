@@ -51,6 +51,14 @@ impl PitchShifter {
         self.engines[self.active].channels.len()
     }
 
+    pub fn analysis(&self) -> (f32, f32) {
+        self.engines[self.active]
+            .channels
+            .first()
+            .map(|channel| (channel.f0_hz, channel.mono_confidence))
+            .unwrap_or((0.0, 0.0))
+    }
+
     pub fn process_sample(
         &mut self,
         channel: usize,
@@ -406,8 +414,27 @@ impl Channel {
 
         let mut best_bin = 0;
         let mut best_score = f32::NEG_INFINITY;
+        let magnitude_threshold = self.magnitude.iter().copied().fold(0.0, f32::max) * 0.05;
         if max_bin > min_bin {
             for candidate in min_bin..=max_bin {
+                if self.magnitude[candidate] < magnitude_threshold {
+                    continue;
+                }
+                if self.magnitude[candidate] <= self.magnitude[candidate - 1]
+                    || self.magnitude[candidate] < self.magnitude[candidate + 1]
+                {
+                    continue;
+                }
+
+                let mut strongest: f32 = 0.0;
+                for harmonic in 1..=HARMONICS {
+                    let bin = (candidate * harmonic).min(bins - 1);
+                    strongest = strongest.max(self.magnitude[bin]);
+                }
+                if self.magnitude[candidate] < strongest * 0.25 {
+                    continue;
+                }
+
                 let mut score = 0.0;
                 for harmonic in 1..=HARMONICS {
                     let bin = candidate * harmonic;
@@ -426,8 +453,13 @@ impl Channel {
         let mut harmonic_energy = 0.0;
         if best_bin > 0 {
             for harmonic in 1..=HARMONICS {
-                let bin = best_bin * harmonic;
-                if bin < bins {
+                let center = best_bin * harmonic;
+                if center >= bins {
+                    break;
+                }
+                let start = center.saturating_sub(1);
+                let end = (center + 1).min(bins - 1);
+                for bin in start..=end {
                     harmonic_energy += self.magnitude[bin] * self.magnitude[bin];
                 }
             }
@@ -440,11 +472,24 @@ impl Channel {
         };
         let target = confidence * (1.0 - flatness).clamp(0.0, 1.0);
         self.mono_confidence += (target - self.mono_confidence) * 0.1;
-        self.f0_hz = if best_bin > 0 {
-            best_bin as f32 * self.sample_rate / self.n as f32
+
+        let refined_bin = if best_bin > 0 {
+            let left = best_bin.saturating_sub(1);
+            let right = (best_bin + 1).min(bins - 1);
+            let a = (self.magnitude[left] + 1.0e-12).ln();
+            let b = (self.magnitude[best_bin] + 1.0e-12).ln();
+            let c = (self.magnitude[right] + 1.0e-12).ln();
+            let denominator = a - 2.0 * b + c;
+            let offset = if denominator.abs() > 1.0e-9 {
+                (0.5 * (a - c) / denominator).clamp(-0.5, 0.5)
+            } else {
+                0.0
+            };
+            best_bin as f32 + offset
         } else {
             0.0
         };
+        self.f0_hz = refined_bin * self.sample_rate / self.n as f32;
 
         if self.harmonic_locking {
             if self.mono_confidence < 0.45 {
@@ -752,6 +797,7 @@ mod tests {
             channel.mono_confidence
         );
         assert!(channel.harmonic_locking);
+        assert!((channel.f0_hz - 220.0).abs() < 5.0, "f0 {}", channel.f0_hz);
     }
 
     #[test]

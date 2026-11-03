@@ -98,6 +98,7 @@ As the name suggests, morphing the key is the core purpose.
 - Set the output key (Target Key)
 - Applied shift = Target Key − Source Key (in semitones)
   - Example: Source = A minor, Target = C minor → +3 semitones
+- Choose the shortest offset within ±6 semitones
 - If automatic detection is disabled or confidence is low, use the manual value
 - When automatic detection is active, show the detected key and confidence
   (0–100%) in the UI
@@ -109,9 +110,9 @@ As the name suggests, morphing the key is the core purpose.
 - `Retune Speed`: 0–200 ms (0 = immediate; larger values retune more gently)
 - Scale presets: Major, Natural Minor, Harmonic Minor, Melodic Minor, Dorian,
   Phrygian, Lydian, Mixolydian, Locrian, Major Pentatonic, Minor Pentatonic,
-  Blues, Chromatic, Custom (per-note on/off for 12 notes)
-- In sections detected as polyphonic, automatically drive the snap amount toward 0
-  to prevent misbehavior
+  Blues, Chromatic
+- In sections detected as polyphonic, fade the snap correction toward 0 based on
+  the monophonicity confidence
 - Show "most effective on monophonic sources" in the UI
 
 #### FR-4 Single engine and quality presets
@@ -170,10 +171,9 @@ density, harmonic structure) and switches its internal processing automatically.
 - Estimate tuning (A4 = 440 Hz ±50 cents) and correct the chroma
 - Score 24 keys (12 roots × Major/Minor) by correlation with
   Krumhansl-Schmuckler profiles
-- Apply Viterbi smoothing over a 2–4 second window to suppress small key
-  fluctuations
+- Apply exponential chroma smoothing with about a 1 second time constant
 - Output: root (0–11), mode (Major / Minor), confidence (0–1)
-- Update rate: every 250 ms (to bound CPU load)
+- Update rate: every 2048 samples (about 43 ms at 48 kHz)
 - During silence, hold the previous value and decay confidence
 
 ### 4.3 Presets / state
@@ -365,12 +365,17 @@ Input (stereo)
 
 - Input: downmixed signal (L+R)/2
 - STFT: 4096 points, hop 2048, Hann window
-- Chroma: 12 bins, accumulated on a logarithmic frequency axis, with low-frequency
-  harmonics suppressed
-- Tuning: estimate the A4 offset from spectral peaks (±50 cents)
-- Key scoring: Krumhansl-Schmuckler Major / Minor profiles
-- Smoothing: optimize scores from the last 8 frames (about 2 seconds) with Viterbi
-- Output confidence: normalized difference between the top and second-best scores
+- Chroma: 12 bins accumulated from spectral peaks (55 Hz–5 kHz)
+- Refine peak frequencies with parabolic interpolation before mapping them to pitch
+  classes
+- Tuning: estimate the A4 offset from the strongest low-frequency peak (±50 cents)
+  and compensate the chroma mapping
+- Key scoring: Pearson correlation against Krumhansl-Kessler Major / Minor profiles
+  for all 24 keys
+- Smoothing: exponential chroma smoothing (about 1 second time constant)
+- Update rate: every 2048 samples (about 43 ms at 48 kHz)
+- Output confidence: blend of the best correlation and its margin over the
+  second-best score
 
 ---
 
@@ -401,14 +406,14 @@ Input (stereo)
 
 | ID | Display | Range | Default | Unit | Notes |
 |---|---|---|---|---|---|
-| `source_auto` | Source Auto | ON/OFF | ON | — | OFF = manual |
-| `source_root` | Source Root | C–B | A | — | Manual only |
+| `source_auto` | Source Auto | ON/OFF | OFF | — | OFF = manual |
+| `source_root` | Source Root | C–B | C | — | Manual only |
 | `source_mode` | Source Mode | Major / Minor | Minor | — | Manual only |
 | `target_root` | Target Root | C–B | C | — | — |
 | `target_mode` | Target Mode | Major / Minor | Minor | — | — |
 | `snap_amount` | Snap | 0–100 | 0 | % | Monophonic sources |
 | `retune_speed` | Retune | 0–200 | 30 | ms | Monophonic sources |
-| `scale` | Scale | 14 types | Major | — | Monophonic sources |
+| `scale` | Scale | 13 types | Major | — | Monophonic sources |
 
 ### 7.4 Modulation
 
@@ -627,6 +632,7 @@ cargo xtask bundle keymorph --release
 - Pitch detection: within ±5 cents on a 40–1000 Hz sine sweep
 - Key detection: at least 90% correct on synthetic chords and real samples for all
   24 keys
+- Scale snap: a detuned note is corrected to the nearest scale degree
 - FFT / iSTFT: resynthesis error below −120 dBFS
 - Formant control: a formant shift moves spectral energy in the expected direction
 - Monophonic detection: a sine is classified as monophonic and harmonic locking
@@ -703,6 +709,7 @@ cargo xtask bundle keymorph --release
 - [ ] Include harmony generation in v1.0?
 - [ ] Adopt Signalsmith Stretch or continue with a pure Rust implementation?
 - [ ] Visual tone of the UI (colors, fonts, texture)
+- [ ] Custom scale editor (per-note on/off)
 - [ ] Is cloud preset sharing needed?
 - [ ] How far to support Intel Macs (is a Universal Binary mandatory)?
 
