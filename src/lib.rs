@@ -9,6 +9,7 @@ use nih_plug_egui::{
     resizable_window::ResizableWindow,
     widgets,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::dsp::{KeyDetector, PitchShifter};
 use crate::params::{KeyMode, KeyMorphParams, LfoShape, ModTarget, Quality, SCALES, Scale};
@@ -20,6 +21,43 @@ const BYPASS_RAMP_SECONDS: f32 = 0.02;
 const NOTE_NAMES: [&str; 12] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
 ];
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct Snapshot {
+    version: u32,
+    bypass: bool,
+    quality: Quality,
+    transpose: i32,
+    fine: f32,
+    glide: f32,
+    formant_shift: f32,
+    formant_preserve: f32,
+    lfo_shape: LfoShape,
+    lfo_rate: f32,
+    lfo_depth: f32,
+    lfo_phase: f32,
+    mod_target: ModTarget,
+    source_auto: bool,
+    source_root: i32,
+    source_mode: KeyMode,
+    target_root: i32,
+    target_mode: KeyMode,
+    snap_amount: f32,
+    retune_speed: f32,
+    scale: Scale,
+    mix: f32,
+    input_gain: f32,
+    output_gain: f32,
+    limiter: bool,
+}
+
+#[derive(Default)]
+struct EditorState {
+    slot_a: Option<Snapshot>,
+    slot_b: Option<Snapshot>,
+    undo: Vec<Snapshot>,
+    message: String,
+}
 
 struct KeyMorph {
     params: Arc<KeyMorphParams>,
@@ -92,7 +130,7 @@ impl Plugin for KeyMorph {
 
         create_egui_editor(
             egui_state.clone(),
-            (),
+            EditorState::default(),
             |ctx, _state| {
                 let mut style = (*ctx.style()).clone();
                 style.visuals = egui::Visuals::dark();
@@ -101,7 +139,7 @@ impl Plugin for KeyMorph {
                 style.spacing.item_spacing = egui::vec2(10.0, 8.0);
                 ctx.set_style(style);
             },
-            move |ctx, setter, _state| {
+            move |ctx, setter, state| {
                 ResizableWindow::new("keymorph-ui")
                     .min_size(Vec2::new(560.0, 640.0))
                     .show(ctx, egui_state.as_ref(), |ui| {
@@ -116,6 +154,50 @@ impl Plugin for KeyMorph {
                             setter.set_parameter(&params.bypass, bypassed);
                             setter.end_set_parameter(&params.bypass);
                         }
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("Store A").clicked() {
+                                state.slot_a = Some(Snapshot::capture(&params));
+                                state.message = String::from("Stored A");
+                            }
+                            if ui.button("Recall A").clicked()
+                                && let Some(snapshot) = state.slot_a
+                            {
+                                push_undo(state, &params);
+                                snapshot.apply(&params, setter);
+                                state.message = String::from("Recalled A");
+                            }
+                            if ui.button("Store B").clicked() {
+                                state.slot_b = Some(Snapshot::capture(&params));
+                                state.message = String::from("Stored B");
+                            }
+                            if ui.button("Recall B").clicked()
+                                && let Some(snapshot) = state.slot_b
+                            {
+                                push_undo(state, &params);
+                                snapshot.apply(&params, setter);
+                                state.message = String::from("Recalled B");
+                            }
+                            if ui.button("Undo").clicked()
+                                && let Some(snapshot) = state.undo.pop()
+                            {
+                                snapshot.apply(&params, setter);
+                                state.message = String::from("Undo");
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("Save Preset").clicked() {
+                                save_preset(&params, &mut state.message);
+                            }
+                            if ui.button("Load Preset").clicked()
+                                && let Some(snapshot) = load_preset(&mut state.message)
+                            {
+                                push_undo(state, &params);
+                                snapshot.apply(&params, setter);
+                            }
+                            ui.label(&state.message);
+                        });
 
                         ui.add_space(4.0);
                         ui.label(format!(
@@ -753,6 +835,127 @@ fn pack_key(root: u8, mode: KeyMode, confidence: f32) -> u32 {
     (root as u32 & 0xF) | (((mode == KeyMode::Minor) as u32) << 4) | (confidence << 8)
 }
 
+impl Snapshot {
+    fn capture(params: &KeyMorphParams) -> Self {
+        Self {
+            version: 1,
+            bypass: params.bypass.value(),
+            quality: params.quality.value(),
+            transpose: params.transpose.value(),
+            fine: params.fine.value(),
+            glide: params.glide.value(),
+            formant_shift: params.formant_shift.value(),
+            formant_preserve: params.formant_preserve.value(),
+            lfo_shape: params.lfo_shape.value(),
+            lfo_rate: params.lfo_rate.value(),
+            lfo_depth: params.lfo_depth.value(),
+            lfo_phase: params.lfo_phase.value(),
+            mod_target: params.mod_target.value(),
+            source_auto: params.source_auto.value(),
+            source_root: params.source_root.value(),
+            source_mode: params.source_mode.value(),
+            target_root: params.target_root.value(),
+            target_mode: params.target_mode.value(),
+            snap_amount: params.snap_amount.value(),
+            retune_speed: params.retune_speed.value(),
+            scale: params.scale.value(),
+            mix: params.mix.value(),
+            input_gain: params.input_gain.value(),
+            output_gain: params.output_gain.value(),
+            limiter: params.limiter.value(),
+        }
+    }
+
+    fn apply(&self, params: &KeyMorphParams, setter: &ParamSetter) {
+        set_param(setter, &params.bypass, self.bypass);
+        set_param(setter, &params.quality, self.quality);
+        set_param(setter, &params.transpose, self.transpose);
+        set_param(setter, &params.fine, self.fine);
+        set_param(setter, &params.glide, self.glide);
+        set_param(setter, &params.formant_shift, self.formant_shift);
+        set_param(setter, &params.formant_preserve, self.formant_preserve);
+        set_param(setter, &params.lfo_shape, self.lfo_shape);
+        set_param(setter, &params.lfo_rate, self.lfo_rate);
+        set_param(setter, &params.lfo_depth, self.lfo_depth);
+        set_param(setter, &params.lfo_phase, self.lfo_phase);
+        set_param(setter, &params.mod_target, self.mod_target);
+        set_param(setter, &params.source_auto, self.source_auto);
+        set_param(setter, &params.source_root, self.source_root);
+        set_param(setter, &params.source_mode, self.source_mode);
+        set_param(setter, &params.target_root, self.target_root);
+        set_param(setter, &params.target_mode, self.target_mode);
+        set_param(setter, &params.snap_amount, self.snap_amount);
+        set_param(setter, &params.retune_speed, self.retune_speed);
+        set_param(setter, &params.scale, self.scale);
+        set_param(setter, &params.mix, self.mix);
+        set_param(setter, &params.input_gain, self.input_gain);
+        set_param(setter, &params.output_gain, self.output_gain);
+        set_param(setter, &params.limiter, self.limiter);
+    }
+}
+
+fn set_param<P: Param>(setter: &ParamSetter, param: &P, value: P::Plain) {
+    setter.begin_set_parameter(param);
+    setter.set_parameter(param, value);
+    setter.end_set_parameter(param);
+}
+
+fn push_undo(state: &mut EditorState, params: &KeyMorphParams) {
+    if state.undo.len() >= 100 {
+        state.undo.remove(0);
+    }
+    state.undo.push(Snapshot::capture(params));
+}
+
+fn save_preset(params: &KeyMorphParams, message: &mut String) {
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter("KeyMorph preset", &["json"])
+        .set_file_name("KeyMorph.json")
+        .save_file()
+    else {
+        return;
+    };
+
+    let preset = Snapshot::capture(params);
+    let result = serde_json::to_string_pretty(&preset)
+        .map_err(|error| error.to_string())
+        .and_then(|json| std::fs::write(&path, json).map_err(|error| error.to_string()));
+
+    *message = match result {
+        Ok(()) => format!("Saved {}", path.display()),
+        Err(error) => format!("Save failed: {error}"),
+    };
+}
+
+fn load_preset(message: &mut String) -> Option<Snapshot> {
+    let path = rfd::FileDialog::new()
+        .add_filter("KeyMorph preset", &["json"])
+        .pick_file()?;
+
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) => {
+            *message = format!("Load failed: {error}");
+            return None;
+        }
+    };
+
+    match serde_json::from_str::<Snapshot>(&text) {
+        Ok(snapshot) if snapshot.version == 1 => {
+            *message = format!("Loaded {}", path.display());
+            Some(snapshot)
+        }
+        Ok(_) => {
+            *message = String::from("Unsupported preset version");
+            None
+        }
+        Err(error) => {
+            *message = format!("Load failed: {error}");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -768,6 +971,19 @@ mod tests {
     fn scale_snap_targets_nearest_degree() {
         assert!((nearest_scale_delta(60.2, 0, Scale::Major) + 0.2).abs() < 1.0e-5);
         assert!((nearest_scale_delta(61.2, 0, Scale::Major) - 0.8).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn snapshot_round_trips_through_json() {
+        let params = KeyMorphParams::default();
+        let snapshot = Snapshot::capture(&params);
+        let json = serde_json::to_string(&snapshot).unwrap();
+        let decoded: Snapshot = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.version, 1);
+        assert_eq!(decoded.quality, snapshot.quality);
+        assert_eq!(decoded.scale, snapshot.scale);
+        assert_eq!(decoded.source_mode, snapshot.source_mode);
     }
 
     #[test]

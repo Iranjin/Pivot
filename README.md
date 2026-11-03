@@ -11,6 +11,7 @@ Real-time pitch and key shifting audio effect for macOS.
 ```bash
 cargo build
 cargo xtask bundle keymorph --release
+cargo xtask bundle-universal keymorph --release
 ```
 
 Bundles are written to `target/bundled/`.

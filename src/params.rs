@@ -1,8 +1,9 @@
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Quality {
     Low,
     Balanced,
@@ -19,7 +20,7 @@ impl Quality {
     }
 }
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum KeyMode {
     #[default]
     Major,
@@ -35,7 +36,7 @@ impl KeyMode {
     }
 }
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Scale {
     #[default]
     Major,
@@ -130,7 +131,7 @@ pub const SCALES: [Scale; 13] = [
     Scale::Chromatic,
 ];
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LfoShape {
     #[default]
     Sine,
@@ -152,7 +153,7 @@ impl LfoShape {
     }
 }
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ModTarget {
     #[default]
     Transpose,

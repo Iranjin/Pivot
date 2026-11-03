@@ -178,10 +178,12 @@ density, harmonic structure) and switches its internal processing automatically.
 
 - Save presets as versioned JSON
 - Persist plugin state through the host (VST3 state / CLAP state)
-- Preset browser: previous/next, save, delete, initialize
-- A/B comparison: hold two parameter sets and switch with one click
-- Undo / redo: parameter change history (up to 100 entries)
-- Implement version migration when loading state
+- Preset browser: save to and load from versioned JSON files
+- A/B comparison: store and recall two parameter sets
+- Undo: restore the previous snapshot before a preset recall or load (up to 100
+  entries)
+- Preset files carry a version field; unsupported versions are rejected with an
+  error
 
 ### 4.4 UI
 
@@ -602,12 +604,15 @@ cargo build
 cargo xtask bundle keymorph --release
 # → target/bundled/KeyMorph.vst3
 # → target/bundled/KeyMorph.clap
+
+# Universal release bundles (arm64 + x86_64)
+cargo xtask bundle-universal keymorph --release
 ```
 
 ### 11.2 Release
 
 1. Pass `cargo test` / `cargo clippy`
-2. `cargo xtask bundle keymorph --release`
+2. `cargo xtask bundle-universal keymorph --release`
 3. Code-sign (Developer ID Application)
 4. Notarize with `notarytool`
 5. Create a `.dmg` and attach the ticket with `stapler`
@@ -636,6 +641,7 @@ cargo xtask bundle keymorph --release
 - Latency: difference between reported and measured values within 1 sample, using
   an impulse response
 - State: all parameters match after save → load
+- Presets: a captured snapshot round-trips through JSON without loss
 - Parameter range: no divergence when feeding boundary values, NaN, and Inf into
   every parameter
 
@@ -676,7 +682,7 @@ cargo xtask bundle keymorph --release
 | M2 | Pitch-synchronous harmonic locking, formant control | 2–3 weeks |
 | M3 | Key detection, key UI, scale snap | 2 weeks |
 | M4 | LFO, limiter, presets, A/B, UI polish | 1–2 weeks |
-| M5 | Validation, optimization, signing / notarization, release | 1–2 weeks |
+| M5 | Validation, optimization, Universal Binary, signing / notarization, release | 1–2 weeks |
 
 ---
 
