@@ -1,4 +1,4 @@
-# KeyMorph — Claude Instructions
+# Pivot — Claude Instructions
 
 `AGENTS.md` is the canonical source of project instructions. Read it before making
 changes.

@@ -1,4 +1,4 @@
-# KeyMorph — Agent Instructions
+# Pivot — Agent Instructions
 
 These instructions apply to the entire repository.
 
@@ -18,7 +18,7 @@ These instructions apply to the entire repository.
 
 ## Project
 
-KeyMorph is a real-time audio pitch/key-shift plugin.
+Pivot is a real-time audio pitch/key-shift plugin.
 
 - Language: Rust (stable, 2024 edition)
 - Plugin framework: nih-plug (VST3 + CLAP)
@@ -33,7 +33,7 @@ cargo build
 cargo test
 cargo clippy -- -D warnings
 cargo fmt --check
-cargo xtask bundle keymorph --release
+cargo xtask bundle pivot --release
 ```
 
 ## Engineering rules

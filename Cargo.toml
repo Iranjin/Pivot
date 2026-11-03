@@ -1,5 +1,5 @@
 [package]
-name = "keymorph"
+name = "pivot"
 version = "0.1.0"
 edition = "2024"
 description = "Real-time pitch and key shifting effect"

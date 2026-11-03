@@ -5,7 +5,7 @@ use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui};
 
 use crate::dsp::{PitchAnalyzer, PitchEngine};
-use crate::params::{KeyMorphParams, LfoShape, ModTarget, Quality, Scale};
+use crate::params::{LfoShape, ModTarget, PivotParams, Quality, Scale};
 use crate::ui::pitch_knob;
 
 mod dsp;
@@ -13,8 +13,8 @@ mod params;
 mod ui;
 
 const BYPASS_RAMP_SECONDS: f32 = 0.02;
-struct KeyMorph {
-    params: Arc<KeyMorphParams>,
+struct Pivot {
+    params: Arc<PivotParams>,
     sample_rate: f32,
     engine: Option<PitchEngine>,
     analyzer: Option<PitchAnalyzer>,
@@ -27,10 +27,10 @@ struct KeyMorph {
     random_value: f32,
 }
 
-impl Default for KeyMorph {
+impl Default for Pivot {
     fn default() -> Self {
         Self {
-            params: Arc::new(KeyMorphParams::default()),
+            params: Arc::new(PivotParams::default()),
             sample_rate: 48_000.0,
             engine: None,
             analyzer: None,
@@ -45,10 +45,10 @@ impl Default for KeyMorph {
     }
 }
 
-impl Plugin for KeyMorph {
-    const NAME: &'static str = "KeyMorph";
-    const VENDOR: &'static str = "KeyMorph";
-    const URL: &'static str = "";
+impl Plugin for Pivot {
+    const NAME: &'static str = "Pivot";
+    const VENDOR: &'static str = "Iranjin";
+    const URL: &'static str = "https://github.com/Iranjin/Pivot";
     const EMAIL: &'static str = "";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -95,7 +95,7 @@ impl Plugin for KeyMorph {
                     egui::Frame::NONE
                         .inner_margin(egui::Margin::same(20))
                         .show(ui, |ui| {
-                            ui.heading(egui::RichText::new("KeyMorph").size(20.0));
+                            ui.heading(egui::RichText::new("Pivot").size(20.0));
                             ui.add_space(6.0);
                             pitch_panel(ui, &params, setter);
                         });
@@ -351,7 +351,7 @@ fn muted() -> egui::Color32 {
     egui::Color32::from_rgb(140, 146, 160)
 }
 
-fn pitch_panel(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
+fn pitch_panel(ui: &mut egui::Ui, params: &PivotParams, setter: &ParamSetter) {
     ui.vertical_centered(|ui| {
         ui.label(egui::RichText::new("PITCH").small().color(muted()));
         ui.add_space(2.0);
@@ -366,8 +366,8 @@ fn pitch_panel(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter)
     });
 }
 
-impl ClapPlugin for KeyMorph {
-    const CLAP_ID: &'static str = "com.keymorph.keymorph";
+impl ClapPlugin for Pivot {
+    const CLAP_ID: &'static str = "com.iranjin.pivot";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Real-time pitch and key shifting effect");
     const CLAP_MANUAL_URL: Option<&'static str> = None;
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
@@ -379,13 +379,13 @@ impl ClapPlugin for KeyMorph {
     ];
 }
 
-impl Vst3Plugin for KeyMorph {
-    const VST3_CLASS_ID: [u8; 16] = *b"KeyMorphKeyMorph";
+impl Vst3Plugin for Pivot {
+    const VST3_CLASS_ID: [u8; 16] = *b"PivotPivotPivot0";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Fx];
 }
 
-nih_export_clap!(KeyMorph);
-nih_export_vst3!(KeyMorph);
+nih_export_clap!(Pivot);
+nih_export_vst3!(Pivot);
 
 fn shortest_key_offset(source: u8, target: u8) -> i32 {
     let difference = (target as i32 - source as i32).rem_euclid(12);

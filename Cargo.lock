@@ -1089,17 +1089,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keymorph"
-version = "0.1.0"
-dependencies = [
- "nih_plug",
- "nih_plug_egui",
- "num-complex",
- "realfft",
- "signalsmith-stretch",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1723,6 +1712,17 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
+name = "pivot"
+version = "0.1.0"
+dependencies = [
+ "nih_plug",
+ "nih_plug_egui",
+ "num-complex",
+ "realfft",
+ "signalsmith-stretch",
+]
 
 [[package]]
 name = "pkg-config"

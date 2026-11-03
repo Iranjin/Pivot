@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-KeyMorph includes the following third-party components.
+Pivot includes the following third-party components.
 
 ## MIT License
 

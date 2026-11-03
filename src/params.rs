@@ -96,7 +96,7 @@ pub enum ModTarget {
 }
 
 #[derive(Params)]
-pub struct KeyMorphParams {
+pub struct PivotParams {
     #[persist = "editor-state-v9"]
     pub editor_state: Arc<EguiState>,
     #[id = "bypass"]
@@ -145,7 +145,7 @@ pub struct KeyMorphParams {
     pub limiter: BoolParam,
 }
 
-impl Default for KeyMorphParams {
+impl Default for PivotParams {
     fn default() -> Self {
         Self {
             editor_state: EguiState::from_size(460, 520),

@@ -1,4 +1,4 @@
-# KeyMorph
+# Pivot
 
 Real-time pitch and key shifting audio effect for macOS.
 
@@ -33,8 +33,8 @@ host's generic parameter list and automation.
 ```bash
 cargo build
 cargo test
-cargo xtask bundle keymorph --release
-cargo xtask bundle-universal keymorph --release
+cargo xtask bundle pivot --release
+cargo xtask bundle-universal pivot --release
 ```
 
 Bundles are written to `target/bundled/`.

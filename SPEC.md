@@ -1,4 +1,4 @@
-# KeyMorph Specification
+# Pivot Specification
 
 - Version: 0.1 (draft)
 - Last updated: 2026-11-03
@@ -11,7 +11,7 @@
 
 ### 1.1 Concept
 
-**KeyMorph** is an audio effect that changes the key (pitch) of incoming audio in
+**Pivot** is an audio effect that changes the key (pitch) of incoming audio in
 real time, in a musically meaningful and freely controllable way.
 
 Beyond simple semitone transposition, it handles all of the following in a single
@@ -364,9 +364,9 @@ Signalsmith Stretch (pitch + formant)
 
 | Item | Value |
 |---|---|
-| Plugin name | KeyMorph |
-| Vendor | TBD |
-| CLAP ID | `com.keymorph.keymorph` |
+| Plugin name | Pivot |
+| Vendor | Iranjin |
+| CLAP ID | `com.iranjin.pivot` |
 | VST3 UID | Generated from the vendor code (fixed) |
 | Version | 0.1.0 (development), 1.0.0 (release) |
 
@@ -480,7 +480,7 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 ### 10.2 Directory layout
 
 ```
-KeyMorph/
+Pivot/
 ├── .cargo/config.toml      # cargo xtask alias
 ├── Cargo.toml
 ├── SPEC.md
@@ -512,18 +512,18 @@ KeyMorph/
 cargo build
 
 # Build bundles
-cargo xtask bundle keymorph --release
-# → target/bundled/KeyMorph.vst3
-# → target/bundled/KeyMorph.clap
+cargo xtask bundle pivot --release
+# → target/bundled/Pivot.vst3
+# → target/bundled/Pivot.clap
 
 # Universal release bundles (arm64 + x86_64)
-cargo xtask bundle-universal keymorph --release
+cargo xtask bundle-universal pivot --release
 ```
 
 ### 11.2 Release
 
 1. Pass `cargo test` / `cargo clippy`
-2. `cargo xtask bundle-universal keymorph --release`
+2. `cargo xtask bundle-universal pivot --release`
 3. Code-sign (Developer ID Application)
 4. Notarize with `notarytool`
 5. Create a `.dmg` and attach the ticket with `stapler`
