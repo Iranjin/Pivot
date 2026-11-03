@@ -2,6 +2,12 @@ use std::f32::consts::FRAC_PI_2;
 use std::sync::Arc;
 
 use nih_plug::prelude::*;
+use nih_plug_egui::{
+    create_egui_editor,
+    egui::{self, Vec2},
+    resizable_window::ResizableWindow,
+    widgets,
+};
 
 use crate::dsp::PitchShifter;
 use crate::params::{KeyMorphParams, Quality};
@@ -61,6 +67,120 @@ impl Plugin for KeyMorph {
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
+    }
+
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        let params = self.params.clone();
+        let egui_state = self.params.editor_state.clone();
+
+        create_egui_editor(
+            egui_state.clone(),
+            (),
+            |ctx, _state| {
+                let mut style = (*ctx.style()).clone();
+                style.visuals = egui::Visuals::dark();
+                style.visuals.panel_fill = egui::Color32::from_rgb(18, 18, 22);
+                style.visuals.window_fill = egui::Color32::from_rgb(18, 18, 22);
+                style.spacing.item_spacing = egui::vec2(10.0, 8.0);
+                ctx.set_style(style);
+            },
+            move |ctx, setter, _state| {
+                ResizableWindow::new("keymorph-ui")
+                    .min_size(Vec2::new(520.0, 360.0))
+                    .show(ctx, egui_state.as_ref(), |ui| {
+                        ui.heading(egui::RichText::new("KeyMorph").size(22.0));
+                        ui.label("Real-time pitch and key shifting");
+                        ui.add_space(4.0);
+                        ui.separator();
+
+                        let mut bypassed = params.bypass.value();
+                        if ui.checkbox(&mut bypassed, "Bypass").changed() {
+                            setter.begin_set_parameter(&params.bypass);
+                            setter.set_parameter(&params.bypass, bypassed);
+                            setter.end_set_parameter(&params.bypass);
+                        }
+
+                        ui.add_space(4.0);
+
+                        egui::Grid::new("keymorph-params")
+                            .num_columns(2)
+                            .spacing([12.0, 8.0])
+                            .show(ui, |ui| {
+                                ui.label("Transpose");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.transpose, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Fine");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.fine, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Glide");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.glide, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Quality");
+                                let current = params.quality.value();
+                                egui::ComboBox::from_id_salt("quality")
+                                    .selected_text(format!("{current:?}"))
+                                    .show_ui(ui, |ui| {
+                                        for value in
+                                            [Quality::Low, Quality::Balanced, Quality::High]
+                                        {
+                                            if ui
+                                                .selectable_label(
+                                                    current == value,
+                                                    format!("{value:?}"),
+                                                )
+                                                .clicked()
+                                            {
+                                                setter.begin_set_parameter(&params.quality);
+                                                setter.set_parameter(&params.quality, value);
+                                                setter.end_set_parameter(&params.quality);
+                                            }
+                                        }
+                                    });
+                                ui.end_row();
+
+                                ui.label("Mix");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.mix, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Input");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.input_gain, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+
+                                ui.label("Output");
+                                ui.add(
+                                    widgets::ParamSlider::for_param(&params.output_gain, setter)
+                                        .with_width(260.0),
+                                );
+                                ui.end_row();
+                            });
+
+                        ui.add_space(4.0);
+                        ui.separator();
+                        ui.label(format!(
+                            "Latency: {} samples",
+                            params.quality.value().fft_size()
+                        ));
+                    });
+            },
+        )
     }
 
     fn initialize(
@@ -171,8 +291,7 @@ impl ClapPlugin for KeyMorph {
 
 impl Vst3Plugin for KeyMorph {
     const VST3_CLASS_ID: [u8; 16] = *b"KeyMorphKeyMorph";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Fx];
 }
 
 nih_export_clap!(KeyMorph);

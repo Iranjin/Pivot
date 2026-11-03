@@ -1,4 +1,6 @@
 use nih_plug::prelude::*;
+use nih_plug_egui::EguiState;
+use std::sync::Arc;
 
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Quality {
@@ -19,6 +21,8 @@ impl Quality {
 
 #[derive(Params)]
 pub struct KeyMorphParams {
+    #[persist = "editor-state"]
+    pub editor_state: Arc<EguiState>,
     #[id = "bypass"]
     pub bypass: BoolParam,
     #[id = "quality"]
@@ -40,6 +44,7 @@ pub struct KeyMorphParams {
 impl Default for KeyMorphParams {
     fn default() -> Self {
         Self {
+            editor_state: EguiState::from_size(560, 400),
             bypass: BoolParam::new("Bypass", false),
             quality: EnumParam::new("Quality", Quality::Balanced),
             transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })
