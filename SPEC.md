@@ -124,9 +124,9 @@ density, harmonic structure) and switches its internal processing automatically.
 
 | Quality preset | STFT window | Primary use |
 |---|---|---|
-| Low | 1024 | Latency-critical monitoring while recording |
-| Balanced | 2048 | Default; normal mixing work |
-| High | 4096 | Highest quality (checking before export) |
+| Low | 1024 | Lowest CPU |
+| Balanced | 2048 | Middle ground |
+| High | 4096 | Default; highest quality |
 
 - In strongly monophonic sections, use pitch-synchronous harmonic phase locking to
   prioritize vocal naturalness
@@ -328,7 +328,7 @@ Input (stereo)
 
 ### 6.4 Formant control
 
-- Estimate the spectral envelope with a 1/6-octave moving average over the
+- Estimate the spectral envelope with a 1/3-octave moving average over the
   magnitude spectrum
 - Pre-warp the envelope by `W = 2^(formant/12) * r^(-preserve)` in the stretched
   domain, where `r` is the pitch ratio
@@ -372,7 +372,7 @@ Input (stereo)
 | ID | Display | Range | Default | Unit | Smoothing | Notes |
 |---|---|---|---|---|---|---|
 | `bypass` | Bypass | ON/OFF | OFF | — | — | Host integration |
-| `quality` | Quality | Low / Balanced / High | Balanced | — | — | Changes CPU and artifacts |
+| `quality` | Quality | Low / Balanced / High | High | — | — | Changes CPU and artifacts |
 | `mix` | Mix | 0–100 | 100 | % | 20 ms | Equal power |
 | `input_gain` | Input | −24 to +24 | 0 | dB | 20 ms | — |
 | `output_gain` | Output | −24 to +24 | 0 | dB | 20 ms | — |
@@ -676,7 +676,7 @@ cargo xtask bundle-universal keymorph --release
 |---|---|---|
 | Phase-vocoder quality (phasiness, transient smearing) | High | Phase locking, transient reset, comparative evaluation against Signalsmith |
 | F0 misdetection in monophonic passages | Medium | Confidence gating, hysteresis, fallback to spectral-peak locking |
-| Formant envelope warping artifacts | Medium | 1/6-octave smoothing, gain clamp, preset adjustment |
+| Formant envelope warping artifacts | Medium | 1/3-octave smoothing, gain clamp, preset adjustment |
 | CPU load on mixed material | Medium | Quality presets, SIMD, band splitting, reduced update rates |
 | Relative-key misdetection (Am ↔ C) | Medium | Show confidence, allow manual override, tune smoothing |
 | Latency vs. quality trade-off | Medium | Make quality presets explicit, show measured values in the UI, no zero-latency mode |

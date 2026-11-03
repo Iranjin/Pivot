@@ -9,7 +9,7 @@ use crate::params::Quality;
 const HOP_DIVISOR: usize = 8;
 const OLA_MULTIPLIER: usize = 8;
 pub const REPORTED_LATENCY_SAMPLES: u32 = 4096;
-const ENVELOPE_BANDWIDTH_OCTAVES: f32 = 1.0 / 6.0;
+const ENVELOPE_BANDWIDTH_OCTAVES: f32 = 1.0 / 3.0;
 const MIN_F0_HZ: f32 = 40.0;
 const MAX_F0_HZ: f32 = 800.0;
 const HARMONICS: usize = 5;
@@ -140,6 +140,7 @@ struct Channel {
     prev_synth: Vec<f32>,
     new_synth: Vec<f32>,
     magnitude: Vec<f32>,
+    prev_magnitude: Vec<f32>,
     peaks: Vec<usize>,
     first_frame: bool,
     mono_confidence: f32,
@@ -204,7 +205,8 @@ impl Channel {
             prev_synth: vec![0.0; bins],
             new_synth: vec![0.0; bins],
             magnitude: vec![0.0; bins],
-            peaks: Vec::with_capacity(bins),
+            prev_magnitude: vec![0.0; bins],
+            peaks: Vec::with_capacity(bins * 2),
             first_frame: true,
             mono_confidence: 0.0,
             f0_hz: 0.0,
@@ -236,6 +238,7 @@ impl Channel {
         self.prev_synth.fill(0.0);
         self.new_synth.fill(0.0);
         self.magnitude.fill(0.0);
+        self.prev_magnitude.fill(0.0);
         self.peaks.clear();
         self.first_frame = true;
         self.mono_confidence = 0.0;
@@ -308,7 +311,19 @@ impl Channel {
 
         self.update_monophonicity();
 
-        if self.first_frame {
+        let mut flux = 0.0;
+        let mut energy = 0.0;
+        let mut previous_energy = 0.0;
+        for k in 0..bins {
+            let magnitude = self.magnitude[k];
+            flux += (magnitude - self.prev_magnitude[k]).max(0.0);
+            energy += magnitude;
+            previous_energy += self.prev_magnitude[k];
+            self.prev_magnitude[k] = magnitude;
+        }
+        let transient = energy > 1.0e-9 && flux > energy * 0.5 && energy > previous_energy * 1.2;
+
+        if self.first_frame || transient {
             self.new_synth.copy_from_slice(&self.phase);
             self.prev_phase.copy_from_slice(&self.phase);
             self.first_frame = false;
@@ -523,10 +538,6 @@ impl Channel {
                 }
                 harmonic_index += 1;
             }
-
-            if !self.peaks.is_empty() {
-                return;
-            }
         }
 
         for k in 1..self.bins - 1 {
@@ -548,6 +559,11 @@ impl Channel {
             if max_magnitude > 1.0e-9 {
                 self.peaks.push(max_index);
             }
+        }
+
+        if harmonic {
+            self.peaks.sort_unstable();
+            self.peaks.dedup();
         }
     }
 
@@ -599,11 +615,18 @@ impl Channel {
         let index = position.floor() as usize;
         let fraction = (position - index as f64) as f32;
 
-        let a = self.ola[index & self.ola_mask];
-        let b = self.ola[(index + 1) & self.ola_mask];
-        let output = a + (b - a) * fraction;
+        let y0 = self.ola[index.saturating_sub(1) & self.ola_mask];
+        let y1 = self.ola[index & self.ola_mask];
+        let y2 = self.ola[(index + 1) & self.ola_mask];
+        let y3 = self.ola[(index + 2) & self.ola_mask];
 
-        let zero_target = index.saturating_sub(2);
+        let c0 = y1;
+        let c1 = 0.5 * (y2 - y0);
+        let c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+        let c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+        let output = ((c3 * fraction + c2) * fraction + c1) * fraction + c0;
+
+        let zero_target = index.saturating_sub(3);
         while self.zero_pos < zero_target {
             self.ola[self.zero_pos & self.ola_mask] = 0.0;
             self.zero_pos += 1;

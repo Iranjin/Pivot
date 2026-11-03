@@ -228,7 +228,7 @@ impl Default for KeyMorphParams {
         Self {
             editor_state: EguiState::from_size(760, 520),
             bypass: BoolParam::new("Bypass", false),
-            quality: EnumParam::new("Quality", Quality::Balanced),
+            quality: EnumParam::new("Quality", Quality::High),
             transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })
                 .with_unit(" st"),
             fine: FloatParam::new(
