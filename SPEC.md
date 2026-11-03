@@ -50,7 +50,7 @@ As the name suggests, morphing the key is the core purpose.
 - Scale snap (most effective on monophonic and vocal sources)
 - Formant preservation / shift
 - Glide (morphing between keys)
-- LFO modulation, MIDI pitch bend / CC input
+- LFO modulation
 - Dry/wet, input/output gain, safety limiter
 - Presets, A/B comparison, state persistence
 - VST3 / CLAP bundles, macOS 12+ (Universal Binary)
@@ -58,6 +58,7 @@ As the name suggests, morphing the key is the core purpose.
 ### 2.2 Out of scope for v1.0 (future candidates)
 
 - AAX / AU output (AU is a v1.1 candidate)
+- MIDI pitch bend / CC modulation
 - Harmony generation (additional voices such as +3rd / +5th)
 - Full-mix processing that embeds stem separation
 - Windows / Linux support
@@ -145,14 +146,11 @@ density, harmonic structure) and switches its internal processing automatically.
 #### FR-6 Modulation
 
 - LFO
-  - Rate: 0.01–20 Hz (sync mode: 1/1–1/32, tempo-synced)
+  - Rate: 0.01–20 Hz
   - Depth: 0–12 semitones
   - Shape: Sine / Triangle / Square / Saw / Random
   - Phase: 0–360°
-- MIDI
-  - Pitch bend (range 0–24 semitones, configurable)
-  - Mod wheel / aftertouch / arbitrary CC → map to Depth
-  - Disabled when no MIDI input is present
+  - Target: Transpose / Mix
 - Automation
   - All primary parameters support host automation
   - Transpose / Target Key are applied with sample accuracy
@@ -421,11 +419,9 @@ Input (stereo)
 |---|---|---|---|---|---|
 | `lfo_shape` | LFO Shape | Sine / Tri / Square / Saw / Random | Sine | — | — |
 | `lfo_rate` | LFO Rate | 0.01–20 | 0.5 | Hz | — |
-| `lfo_sync` | LFO Sync | ON/OFF | OFF | — | Tempo sync |
 | `lfo_depth` | LFO Depth | 0–12 | 0 | st | — |
 | `lfo_phase` | LFO Phase | 0–360 | 0 | ° | — |
-| `bend_range` | Bend Range | 0–24 | 2 | st | MIDI |
-| `mod_target` | Mod Target | Transpose / Fine / Mix | Transpose | — | — |
+| `mod_target` | LFO Target | Transpose / Mix | Transpose | — | — |
 
 ---
 
@@ -647,6 +643,7 @@ cargo xtask bundle keymorph --release
 
 - Bit-identical to dry at pitch 0 / Mix 100% (null test)
 - Click noise below −60 dBFS when shifting ±24 semitones
+- Output stays at or below −0.3 dBFS when the limiter is enabled
 - No dropouts or clicks when the adaptive path switches
 - Works at sample rates from 44.1 to 192 kHz
 - Works with buffers from 32 to 2048 samples
@@ -678,7 +675,7 @@ cargo xtask bundle keymorph --release
 | M1 | Phase-vocoder pitch shift, parameters, latency reporting | 2–3 weeks |
 | M2 | Pitch-synchronous harmonic locking, formant control | 2–3 weeks |
 | M3 | Key detection, key UI, scale snap | 2 weeks |
-| M4 | LFO / MIDI, presets, A/B, UI polish | 1–2 weeks |
+| M4 | LFO, limiter, presets, A/B, UI polish | 1–2 weeks |
 | M5 | Validation, optimization, signing / notarization, release | 1–2 weeks |
 
 ---
@@ -710,6 +707,7 @@ cargo xtask bundle keymorph --release
 - [ ] Adopt Signalsmith Stretch or continue with a pure Rust implementation?
 - [ ] Visual tone of the UI (colors, fonts, texture)
 - [ ] Custom scale editor (per-note on/off)
+- [ ] MIDI pitch bend / CC modulation
 - [ ] Is cloud preset sharing needed?
 - [ ] How far to support Intel Macs (is a Universal Binary mandatory)?
 

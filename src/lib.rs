@@ -1,4 +1,4 @@
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::{FRAC_PI_2, TAU};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -11,7 +11,7 @@ use nih_plug_egui::{
 };
 
 use crate::dsp::{KeyDetector, PitchShifter};
-use crate::params::{KeyMode, KeyMorphParams, Quality, SCALES, Scale};
+use crate::params::{KeyMode, KeyMorphParams, LfoShape, ModTarget, Quality, SCALES, Scale};
 
 mod dsp;
 mod params;
@@ -31,6 +31,9 @@ struct KeyMorph {
     pitch_semitones: f32,
     snap_semitones: f32,
     active_mix: f32,
+    lfo_phase: f32,
+    random_state: u32,
+    random_value: f32,
 }
 
 impl Default for KeyMorph {
@@ -45,6 +48,9 @@ impl Default for KeyMorph {
             pitch_semitones: 0.0,
             snap_semitones: 0.0,
             active_mix: 1.0,
+            lfo_phase: 0.0,
+            random_state: 0x1234_5678,
+            random_value: 0.0,
         }
     }
 }
@@ -97,7 +103,7 @@ impl Plugin for KeyMorph {
             },
             move |ctx, setter, _state| {
                 ResizableWindow::new("keymorph-ui")
-                    .min_size(Vec2::new(560.0, 620.0))
+                    .min_size(Vec2::new(560.0, 640.0))
                     .show(ctx, egui_state.as_ref(), |ui| {
                         ui.heading(egui::RichText::new("KeyMorph").size(22.0));
                         ui.label("Real-time pitch and key shifting");
@@ -112,159 +118,252 @@ impl Plugin for KeyMorph {
                         }
 
                         ui.add_space(4.0);
-
-                        egui::Grid::new("keymorph-params")
-                            .num_columns(2)
-                            .spacing([12.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label("Transpose");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.transpose, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Fine");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.fine, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Glide");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.glide, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Formant");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.formant_shift, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Preserve");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(
-                                        &params.formant_preserve,
-                                        setter,
-                                    )
-                                    .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Detected");
-                                let packed = detected.load(Ordering::Relaxed);
-                                let detected_root = (packed & 0xF) as usize;
-                                let detected_minor = (packed >> 4) & 1 == 1;
-                                let detected_confidence = (packed >> 8) & 0x7F;
-                                let detected_text = if detected_confidence == 0 {
-                                    String::from("Detected: —")
-                                } else {
-                                    format!(
-                                        "{} {} ({}%)",
-                                        NOTE_NAMES[detected_root.min(11)],
-                                        if detected_minor { "minor" } else { "major" },
-                                        detected_confidence
-                                    )
-                                };
-                                ui.label(detected_text);
-                                ui.end_row();
-
-                                ui.label("Source Auto");
-                                let mut source_auto = params.source_auto.value();
-                                if ui.checkbox(&mut source_auto, "").changed() {
-                                    setter.begin_set_parameter(&params.source_auto);
-                                    setter.set_parameter(&params.source_auto, source_auto);
-                                    setter.end_set_parameter(&params.source_auto);
-                                }
-                                ui.end_row();
-
-                                ui.label("Source Key");
-                                ui.horizontal(|ui| {
-                                    note_combo(ui, "source-root", &params.source_root, setter);
-                                    mode_combo(ui, "source-mode", &params.source_mode, setter);
-                                });
-                                ui.end_row();
-
-                                ui.label("Target Key");
-                                ui.horizontal(|ui| {
-                                    note_combo(ui, "target-root", &params.target_root, setter);
-                                    mode_combo(ui, "target-mode", &params.target_mode, setter);
-                                });
-                                ui.end_row();
-
-                                ui.label("Snap");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.snap_amount, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Retune");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.retune_speed, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Scale");
-                                scale_combo(ui, "scale", &params.scale, setter);
-                                ui.end_row();
-
-                                ui.label("Quality");
-                                let current = params.quality.value();
-                                egui::ComboBox::from_id_salt("quality")
-                                    .selected_text(format!("{current:?}"))
-                                    .show_ui(ui, |ui| {
-                                        for value in
-                                            [Quality::Low, Quality::Balanced, Quality::High]
-                                        {
-                                            if ui
-                                                .selectable_label(
-                                                    current == value,
-                                                    format!("{value:?}"),
-                                                )
-                                                .clicked()
-                                            {
-                                                setter.begin_set_parameter(&params.quality);
-                                                setter.set_parameter(&params.quality, value);
-                                                setter.end_set_parameter(&params.quality);
-                                            }
-                                        }
-                                    });
-                                ui.end_row();
-
-                                ui.label("Mix");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.mix, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Input");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.input_gain, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-
-                                ui.label("Output");
-                                ui.add(
-                                    widgets::ParamSlider::for_param(&params.output_gain, setter)
-                                        .with_width(240.0),
-                                );
-                                ui.end_row();
-                            });
-
-                        ui.add_space(4.0);
-                        ui.separator();
                         ui.label(format!(
                             "Latency: {} samples",
                             params.quality.value().fft_size()
                         ));
+                        ui.add_space(4.0);
+
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                egui::Grid::new("keymorph-params")
+                                    .num_columns(2)
+                                    .spacing([12.0, 8.0])
+                                    .show(ui, |ui| {
+                                        ui.label("Transpose");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.transpose,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Fine");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(&params.fine, setter)
+                                                .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Glide");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(&params.glide, setter)
+                                                .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Formant");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.formant_shift,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Preserve");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.formant_preserve,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("LFO Shape");
+                                        lfo_shape_combo(ui, "lfo-shape", &params.lfo_shape, setter);
+                                        ui.end_row();
+
+                                        ui.label("LFO Rate");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.lfo_rate,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("LFO Depth");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.lfo_depth,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("LFO Phase");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.lfo_phase,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("LFO Target");
+                                        mod_target_combo(
+                                            ui,
+                                            "lfo-target",
+                                            &params.mod_target,
+                                            setter,
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Detected");
+                                        let packed = detected.load(Ordering::Relaxed);
+                                        let detected_root = (packed & 0xF) as usize;
+                                        let detected_minor = (packed >> 4) & 1 == 1;
+                                        let detected_confidence = (packed >> 8) & 0x7F;
+                                        let detected_text = if detected_confidence == 0 {
+                                            String::from("Detected: —")
+                                        } else {
+                                            format!(
+                                                "{} {} ({}%)",
+                                                NOTE_NAMES[detected_root.min(11)],
+                                                if detected_minor { "minor" } else { "major" },
+                                                detected_confidence
+                                            )
+                                        };
+                                        ui.label(detected_text);
+                                        ui.end_row();
+
+                                        ui.label("Source Auto");
+                                        let mut source_auto = params.source_auto.value();
+                                        if ui.checkbox(&mut source_auto, "").changed() {
+                                            setter.begin_set_parameter(&params.source_auto);
+                                            setter.set_parameter(&params.source_auto, source_auto);
+                                            setter.end_set_parameter(&params.source_auto);
+                                        }
+                                        ui.end_row();
+
+                                        ui.label("Source Key");
+                                        ui.horizontal(|ui| {
+                                            note_combo(
+                                                ui,
+                                                "source-root",
+                                                &params.source_root,
+                                                setter,
+                                            );
+                                            mode_combo(
+                                                ui,
+                                                "source-mode",
+                                                &params.source_mode,
+                                                setter,
+                                            );
+                                        });
+                                        ui.end_row();
+
+                                        ui.label("Target Key");
+                                        ui.horizontal(|ui| {
+                                            note_combo(
+                                                ui,
+                                                "target-root",
+                                                &params.target_root,
+                                                setter,
+                                            );
+                                            mode_combo(
+                                                ui,
+                                                "target-mode",
+                                                &params.target_mode,
+                                                setter,
+                                            );
+                                        });
+                                        ui.end_row();
+
+                                        ui.label("Snap");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.snap_amount,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Retune");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.retune_speed,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Scale");
+                                        scale_combo(ui, "scale", &params.scale, setter);
+                                        ui.end_row();
+
+                                        ui.label("Quality");
+                                        let current = params.quality.value();
+                                        egui::ComboBox::from_id_salt("quality")
+                                            .selected_text(format!("{current:?}"))
+                                            .show_ui(ui, |ui| {
+                                                for value in
+                                                    [Quality::Low, Quality::Balanced, Quality::High]
+                                                {
+                                                    if ui
+                                                        .selectable_label(
+                                                            current == value,
+                                                            format!("{value:?}"),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        setter.begin_set_parameter(&params.quality);
+                                                        setter
+                                                            .set_parameter(&params.quality, value);
+                                                        setter.end_set_parameter(&params.quality);
+                                                    }
+                                                }
+                                            });
+                                        ui.end_row();
+
+                                        ui.label("Mix");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(&params.mix, setter)
+                                                .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Input");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.input_gain,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Output");
+                                        ui.add(
+                                            widgets::ParamSlider::for_param(
+                                                &params.output_gain,
+                                                setter,
+                                            )
+                                            .with_width(240.0),
+                                        );
+                                        ui.end_row();
+
+                                        ui.label("Limiter");
+                                        let mut limiter = params.limiter.value();
+                                        if ui.checkbox(&mut limiter, "").changed() {
+                                            setter.begin_set_parameter(&params.limiter);
+                                            setter.set_parameter(&params.limiter, limiter);
+                                            setter.end_set_parameter(&params.limiter);
+                                        }
+                                        ui.end_row();
+                                    });
+                            });
                     });
             },
         )
@@ -310,6 +409,9 @@ impl Plugin for KeyMorph {
             + shortest_key_offset(source_root, target_root) as f32;
         self.snap_semitones = 0.0;
         self.active_mix = if self.params.bypass.value() { 0.0 } else { 1.0 };
+        self.lfo_phase = 0.0;
+        self.random_state = 0x1234_5678;
+        self.random_value = 0.0;
         self.detected_key
             .store(pack_key(0, KeyMode::Minor, 0.0), Ordering::Relaxed);
     }
@@ -355,6 +457,12 @@ impl Plugin for KeyMorph {
         };
         let key_offset = shortest_key_offset(source_root, target_root) as f32;
 
+        let lfo_shape = self.params.lfo_shape.value();
+        let lfo_rate = self.params.lfo_rate.value();
+        let lfo_phase_offset = self.params.lfo_phase.value() / 360.0;
+        let mod_target = self.params.mod_target.value();
+        let limiter = self.params.limiter.value();
+
         let bypass_target = if self.params.bypass.value() { 0.0 } else { 1.0 };
         let bypass_step = 1.0 / (BYPASS_RAMP_SECONDS * self.sample_rate).max(1.0);
         let glide_samples = (self.params.glide.value() * 0.001 * self.sample_rate).max(0.0);
@@ -385,6 +493,51 @@ impl Plugin for KeyMorph {
 
             let snap_amount = self.params.snap_amount.smoothed.next() * 0.01;
             let fine = self.params.fine.smoothed.next();
+
+            let lfo_depth = self.params.lfo_depth.smoothed.next();
+            self.lfo_phase += lfo_rate / self.sample_rate;
+            if self.lfo_phase >= 1.0 {
+                self.lfo_phase -= 1.0;
+                self.random_state = self
+                    .random_state
+                    .wrapping_mul(1_664_525)
+                    .wrapping_add(1_013_904_223);
+                self.random_value = ((self.random_state >> 8) as f32 / 16_777_216.0) * 2.0 - 1.0;
+            }
+            let phase = (self.lfo_phase + lfo_phase_offset).fract();
+            let wave = match lfo_shape {
+                LfoShape::Sine => (TAU * phase).sin(),
+                LfoShape::Triangle => {
+                    if phase < 0.25 {
+                        4.0 * phase
+                    } else if phase < 0.75 {
+                        2.0 - 4.0 * phase
+                    } else {
+                        4.0 * phase - 4.0
+                    }
+                }
+                LfoShape::Square => {
+                    if phase < 0.5 {
+                        1.0
+                    } else {
+                        -1.0
+                    }
+                }
+                LfoShape::Saw => 2.0 * phase - 1.0,
+                LfoShape::Random => self.random_value,
+            };
+            let lfo = wave * lfo_depth;
+            let lfo_pitch = if mod_target == ModTarget::Transpose {
+                lfo
+            } else {
+                0.0
+            };
+            let lfo_mix = if mod_target == ModTarget::Mix {
+                lfo / 12.0
+            } else {
+                0.0
+            };
+
             let (f0, mono_confidence) = shifter.analysis();
             let snap_target = if snap_amount > 0.0 && mono_confidence > 0.5 && f0 > 0.0 {
                 let note = 69.0 + 12.0 * (f0 / 440.0).log2();
@@ -395,7 +548,7 @@ impl Plugin for KeyMorph {
             };
             self.snap_semitones += (snap_target - self.snap_semitones) * retune_coefficient;
 
-            let pitch_target = transpose + fine + key_offset + self.snap_semitones;
+            let pitch_target = transpose + fine + key_offset + self.snap_semitones + lfo_pitch;
             self.pitch_semitones += (pitch_target - self.pitch_semitones) * glide_coefficient;
             let ratio = (self.pitch_semitones / 12.0).exp2();
 
@@ -406,7 +559,7 @@ impl Plugin for KeyMorph {
 
             let input_gain = self.params.input_gain.smoothed.next();
             let output_gain = self.params.output_gain.smoothed.next();
-            let mix = self.params.mix.smoothed.next() * 0.01;
+            let mix = (self.params.mix.smoothed.next() * 0.01 + lfo_mix).clamp(0.0, 1.0);
 
             if self.active_mix < bypass_target {
                 self.active_mix = (self.active_mix + bypass_step).min(bypass_target);
@@ -421,12 +574,18 @@ impl Plugin for KeyMorph {
             for (channel, sample) in channel_samples.iter_mut().enumerate() {
                 let input = *sample * input_gain;
 
-                *sample = if channel < shifter.channel_count() {
+                let mut output = if channel < shifter.channel_count() {
                     let (wet, dry) = shifter.process_sample(channel, input, ratio, envelope_warp);
                     (wet * wet_gain + dry * dry_gain) * output_gain
                 } else {
                     input * output_gain
                 };
+
+                if limiter {
+                    output = output.clamp(-0.966, 0.966);
+                }
+
+                *sample = output;
             }
         }
 
@@ -497,6 +656,55 @@ fn scale_combo(ui: &mut egui::Ui, id: &str, param: &EnumParam<Scale>, setter: &P
         .width(150.0)
         .show_ui(ui, |ui| {
             for value in SCALES {
+                if ui
+                    .selectable_label(current == value, value.name())
+                    .clicked()
+                {
+                    setter.begin_set_parameter(param);
+                    setter.set_parameter(param, value);
+                    setter.end_set_parameter(param);
+                }
+            }
+        });
+}
+
+fn lfo_shape_combo(ui: &mut egui::Ui, id: &str, param: &EnumParam<LfoShape>, setter: &ParamSetter) {
+    let current = param.value();
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(current.name())
+        .width(120.0)
+        .show_ui(ui, |ui| {
+            for value in [
+                LfoShape::Sine,
+                LfoShape::Triangle,
+                LfoShape::Square,
+                LfoShape::Saw,
+                LfoShape::Random,
+            ] {
+                if ui
+                    .selectable_label(current == value, value.name())
+                    .clicked()
+                {
+                    setter.begin_set_parameter(param);
+                    setter.set_parameter(param, value);
+                    setter.end_set_parameter(param);
+                }
+            }
+        });
+}
+
+fn mod_target_combo(
+    ui: &mut egui::Ui,
+    id: &str,
+    param: &EnumParam<ModTarget>,
+    setter: &ParamSetter,
+) {
+    let current = param.value();
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(current.name())
+        .width(120.0)
+        .show_ui(ui, |ui| {
+            for value in [ModTarget::Transpose, ModTarget::Mix] {
                 if ui
                     .selectable_label(current == value, value.name())
                     .clicked()

@@ -71,7 +71,6 @@ impl Scale {
             Scale::Chromatic => "Chromatic",
         }
     }
-
     pub fn mask(self) -> [bool; 12] {
         match self {
             Scale::Major => [
@@ -131,6 +130,44 @@ pub const SCALES: [Scale; 13] = [
     Scale::Chromatic,
 ];
 
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LfoShape {
+    #[default]
+    Sine,
+    Triangle,
+    Square,
+    Saw,
+    Random,
+}
+
+impl LfoShape {
+    pub fn name(self) -> &'static str {
+        match self {
+            LfoShape::Sine => "Sine",
+            LfoShape::Triangle => "Triangle",
+            LfoShape::Square => "Square",
+            LfoShape::Saw => "Saw",
+            LfoShape::Random => "Random",
+        }
+    }
+}
+
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModTarget {
+    #[default]
+    Transpose,
+    Mix,
+}
+
+impl ModTarget {
+    pub fn name(self) -> &'static str {
+        match self {
+            ModTarget::Transpose => "Transpose",
+            ModTarget::Mix => "Mix",
+        }
+    }
+}
+
 #[derive(Params)]
 pub struct KeyMorphParams {
     #[persist = "editor-state"]
@@ -149,6 +186,16 @@ pub struct KeyMorphParams {
     pub formant_shift: FloatParam,
     #[id = "formant_preserve"]
     pub formant_preserve: FloatParam,
+    #[id = "lfo_shape"]
+    pub lfo_shape: EnumParam<LfoShape>,
+    #[id = "lfo_rate"]
+    pub lfo_rate: FloatParam,
+    #[id = "lfo_depth"]
+    pub lfo_depth: FloatParam,
+    #[id = "lfo_phase"]
+    pub lfo_phase: FloatParam,
+    #[id = "mod_target"]
+    pub mod_target: EnumParam<ModTarget>,
     #[id = "source_auto"]
     pub source_auto: BoolParam,
     #[id = "source_root"]
@@ -171,12 +218,14 @@ pub struct KeyMorphParams {
     pub input_gain: FloatParam,
     #[id = "output_gain"]
     pub output_gain: FloatParam,
+    #[id = "limiter"]
+    pub limiter: BoolParam,
 }
 
 impl Default for KeyMorphParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(620, 700),
+            editor_state: EguiState::from_size(620, 760),
             bypass: BoolParam::new("Bypass", false),
             quality: EnumParam::new("Quality", Quality::Balanced),
             transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })
@@ -224,6 +273,39 @@ impl Default for KeyMorphParams {
             .with_smoother(SmoothingStyle::Linear(20.0))
             .with_step_size(1.0)
             .with_unit(" %"),
+            lfo_shape: EnumParam::new("LFO Shape", LfoShape::Sine),
+            lfo_rate: FloatParam::new(
+                "LFO Rate",
+                0.5,
+                FloatRange::Linear {
+                    min: 0.01,
+                    max: 20.0,
+                },
+            )
+            .with_step_size(0.01)
+            .with_unit(" Hz"),
+            lfo_depth: FloatParam::new(
+                "LFO Depth",
+                0.0,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: 12.0,
+                },
+            )
+            .with_smoother(SmoothingStyle::Linear(20.0))
+            .with_step_size(0.1)
+            .with_unit(" st"),
+            lfo_phase: FloatParam::new(
+                "LFO Phase",
+                0.0,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: 360.0,
+                },
+            )
+            .with_step_size(1.0)
+            .with_unit(" °"),
+            mod_target: EnumParam::new("LFO Target", ModTarget::Transpose),
             source_auto: BoolParam::new("Source Auto", false),
             source_root: IntParam::new("Source Root", 0, IntRange::Linear { min: 0, max: 11 }),
             source_mode: EnumParam::new("Source Mode", KeyMode::Minor),
@@ -264,6 +346,7 @@ impl Default for KeyMorphParams {
             .with_unit(" %"),
             input_gain: gain_param("Input"),
             output_gain: gain_param("Output"),
+            limiter: BoolParam::new("Limiter", true),
         }
     }
 }
