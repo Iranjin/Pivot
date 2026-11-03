@@ -241,7 +241,9 @@ impl Default for KeyMorphParams {
             )
             .with_smoother(SmoothingStyle::Linear(20.0))
             .with_step_size(1.0)
-            .with_unit(" ct"),
+            .with_unit(" ct")
+            .with_value_to_string(stepped_formatter(" ct"))
+            .with_string_to_value(Arc::new(parse_float)),
             glide: FloatParam::new(
                 "Glide",
                 20.0,
@@ -262,7 +264,9 @@ impl Default for KeyMorphParams {
             )
             .with_smoother(SmoothingStyle::Linear(20.0))
             .with_step_size(1.0)
-            .with_unit(" st"),
+            .with_unit(" st")
+            .with_value_to_string(stepped_formatter(" st"))
+            .with_string_to_value(Arc::new(parse_float)),
             formant_preserve: FloatParam::new(
                 "Preserve",
                 100.0,
@@ -350,6 +354,21 @@ impl Default for KeyMorphParams {
             limiter: BoolParam::new("Limiter", true),
         }
     }
+}
+
+fn stepped_formatter(unit: &'static str) -> Arc<dyn Fn(f32) -> String + Send + Sync> {
+    Arc::new(move |value| {
+        let rounded = if value.abs() < 0.5 {
+            0.0
+        } else {
+            value.round()
+        };
+        format!("{rounded:.0}{unit}")
+    })
+}
+
+fn parse_float(text: &str) -> Option<f32> {
+    text.split_whitespace().next()?.parse().ok()
 }
 
 fn gain_param(name: &'static str) -> FloatParam {

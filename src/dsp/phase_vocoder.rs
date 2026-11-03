@@ -8,6 +8,7 @@ use crate::params::Quality;
 
 const HOP_DIVISOR: usize = 8;
 const OLA_MULTIPLIER: usize = 8;
+pub const REPORTED_LATENCY_SAMPLES: u32 = 4096;
 const ENVELOPE_BANDWIDTH_OCTAVES: f32 = 1.0 / 6.0;
 const MIN_F0_HZ: f32 = 40.0;
 const MAX_F0_HZ: f32 = 800.0;
@@ -70,12 +71,11 @@ impl PitchShifter {
     }
 
     pub fn latency_samples(&self) -> u32 {
-        self.engines[self.active].n as u32
+        REPORTED_LATENCY_SAMPLES
     }
 }
 
 struct VocoderEngine {
-    n: usize,
     channels: Vec<Channel>,
 }
 
@@ -93,7 +93,7 @@ impl VocoderEngine {
             .map(|_| Channel::new(n, sample_rate, forward.clone(), inverse.clone()))
             .collect();
 
-        Self { n, channels }
+        Self { channels }
     }
 
     fn reset(&mut self) {
@@ -150,9 +150,8 @@ struct Channel {
     prefix: Vec<f32>,
     envelope: Vec<f32>,
     formant_gain: Vec<f32>,
-    delay: Vec<f32>,
-    delay_write: usize,
-    delay_count: u64,
+    dry_delay: DelayLine,
+    wet_pad: DelayLine,
     forward: Arc<dyn RealToComplex<f32>>,
     inverse: Arc<dyn ComplexToReal<f32>>,
 }
@@ -215,9 +214,8 @@ impl Channel {
             prefix: vec![0.0; bins + 1],
             envelope: vec![0.0; bins],
             formant_gain: vec![1.0; bins],
-            delay: vec![0.0; n],
-            delay_write: 0,
-            delay_count: 0,
+            dry_delay: DelayLine::new(REPORTED_LATENCY_SAMPLES as usize),
+            wet_pad: DelayLine::new(REPORTED_LATENCY_SAMPLES as usize),
             forward,
             inverse,
         }
@@ -246,9 +244,8 @@ impl Channel {
         self.prefix.fill(0.0);
         self.envelope.fill(0.0);
         self.formant_gain.fill(1.0);
-        self.delay.fill(0.0);
-        self.delay_write = 0;
-        self.delay_count = 0;
+        self.dry_delay.reset();
+        self.wet_pad.reset();
     }
 
     fn process(&mut self, input: f32, ratio: f32, envelope_warp: f32) -> (f32, f32) {
@@ -262,7 +259,7 @@ impl Channel {
             self.process_frame(ratio, envelope_warp);
         }
 
-        let wet = if self.samples_seen > self.n as u64 {
+        let wet_raw = if self.samples_seen > self.n as u64 {
             let output = self.read_ola();
             self.read_pos += ratio as f64;
             output
@@ -270,7 +267,14 @@ impl Channel {
             0.0
         };
 
-        (wet, self.delay_sample(input))
+        let wet = self
+            .wet_pad
+            .process(wet_raw, REPORTED_LATENCY_SAMPLES as usize - self.n);
+        let dry = self
+            .dry_delay
+            .process(input, REPORTED_LATENCY_SAMPLES as usize);
+
+        (wet, dry)
     }
 
     fn process_frame(&mut self, ratio: f32, envelope_warp: f32) {
@@ -607,17 +611,45 @@ impl Channel {
 
         output
     }
+}
 
-    fn delay_sample(&mut self, input: f32) -> f32 {
-        let output = if self.delay_count >= self.n as u64 {
-            self.delay[self.delay_write]
+struct DelayLine {
+    buffer: Vec<f32>,
+    write: usize,
+    count: u64,
+}
+
+impl DelayLine {
+    fn new(capacity: usize) -> Self {
+        Self {
+            buffer: vec![0.0; capacity],
+            write: 0,
+            count: 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.buffer.fill(0.0);
+        self.write = 0;
+        self.count = 0;
+    }
+
+    fn process(&mut self, input: f32, delay: usize) -> f32 {
+        if delay == 0 {
+            return input;
+        }
+
+        let capacity = self.buffer.len();
+        let output = if self.count >= delay as u64 {
+            let read = (self.write + capacity - delay % capacity) % capacity;
+            self.buffer[read]
         } else {
             0.0
         };
 
-        self.delay[self.delay_write] = input;
-        self.delay_write = (self.delay_write + 1) & (self.n - 1);
-        self.delay_count += 1;
+        self.buffer[self.write] = input;
+        self.write = (self.write + 1) % capacity;
+        self.count += 1;
 
         output
     }
@@ -801,12 +833,12 @@ mod tests {
     }
 
     #[test]
-    fn quality_changes_latency() {
+    fn quality_keeps_reported_latency() {
         let mut shifter = PitchShifter::new(1, SAMPLE_RATE);
         shifter.set_quality(Quality::Low);
-        assert_eq!(shifter.latency_samples(), 1024);
+        assert_eq!(shifter.latency_samples(), 4096);
         shifter.set_quality(Quality::Balanced);
-        assert_eq!(shifter.latency_samples(), 2048);
+        assert_eq!(shifter.latency_samples(), 4096);
         shifter.set_quality(Quality::High);
         assert_eq!(shifter.latency_samples(), 4096);
     }

@@ -132,7 +132,8 @@ density, harmonic structure) and switches its internal processing automatically.
   prioritize vocal naturalness
 - In polyphonic and mixed sections, lock phases to spectral peaks
 - Switch locking modes with hysteresis based on a smoothed monophonicity estimate
-- Changing the quality preset changes latency, so report the new value to the host
+- Quality presets do not change reported latency; all paths are padded to 4096
+  samples
 
 #### FR-5 Formant control
 
@@ -187,7 +188,7 @@ density, harmonic structure) and switches its internal processing automatically.
 
 ### 4.4 UI
 
-#### Layout (800 × 520 px, resizable)
+#### Layout (620 × 760 px, resizable)
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -251,16 +252,11 @@ density, harmonic structure) and switches its internal processing automatically.
 
 ### 5.2 Performance
 
-- Latency (48 kHz, the value reported to the host)
-
-| Quality | STFT window | Theoretical latency | Target measured |
-|---|---|---|---|
-| Low | 1024 | 21.3 ms | ≤ 22 ms |
-| Balanced | 2048 | 42.7 ms | ≤ 44 ms |
-| High | 4096 | 85.3 ms | ≤ 88 ms |
-
-- The adaptive path does not change latency; every path uses the quality preset's
-  window size
+- Latency (48 kHz, the value reported to the host): 4096 samples (85.3 ms) for
+  every quality preset
+  - The engine pads the wet path to 4096 samples and delays the dry path by the
+    same amount
+  - Quality presets trade CPU and artifacts, not latency
 
 - CPU: Apple M1, 48 kHz / 128 samples, Balanced: ≤ 15% for one instance
   (relative to one core)
@@ -353,10 +349,9 @@ Input (stereo)
 
 ### 6.5 Latency management
 
-- The engine always has a fixed algorithmic delay and reports it to the host via
-  `set_latency_samples()`
-- Changing the quality preset changes the delay; apply the change at the next block
-  boundary and report the new value
+- The engine reports a fixed latency of 4096 samples via `set_latency_samples()`
+- Quality presets do not change the reported latency; the wet path is padded to
+  4096 samples and the dry path is delayed by the same amount
 - To compensate, delay the dry signal by the same amount so the mix stays
   phase-aligned
 - Do not offer a zero-latency mode (prioritize quality)
@@ -386,7 +381,7 @@ Input (stereo)
 | ID | Display | Range | Default | Unit | Smoothing | Notes |
 |---|---|---|---|---|---|---|
 | `bypass` | Bypass | ON/OFF | OFF | — | — | Host integration |
-| `quality` | Quality | Low / Balanced / High | Balanced | — | — | Changes latency |
+| `quality` | Quality | Low / Balanced / High | Balanced | — | — | Changes CPU and artifacts |
 | `mix` | Mix | 0–100 | 100 | % | 20 ms | Equal power |
 | `input_gain` | Input | −24 to +24 | 0 | dB | 20 ms | — |
 | `output_gain` | Output | −24 to +24 | 0 | dB | 20 ms | — |
@@ -515,6 +510,7 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 | `nih_plug_egui` | egui editor | ISC |
 | `egui` (via `nih_plug_egui`; `eframe` for standalone tests) | UI | MIT / Apache-2.0 |
 | `realfft` | Real FFT | MIT |
+| `num-complex` | Complex number types | MIT / Apache-2.0 |
 | `rustfft` | FFT | MIT / Apache-2.0 |
 | `serde` / `serde_json` | State persistence | MIT / Apache-2.0 |
 | `atomic_float` | Parameter sharing | MIT / Apache-2.0 |
@@ -560,34 +556,19 @@ KeyMorph/
 ├── Cargo.toml
 ├── SPEC.md
 ├── README.md
+├── AGENTS.md
+├── CLAUDE.md
 ├── bundler.toml            # bundle display name
 ├── xtask/                  # bundling
 │   ├── Cargo.toml
 │   └── src/main.rs
-├── src/
-│   ├── lib.rs              # plugin entry
-│   ├── plugin.rs           # Plugin impl
-│   ├── params.rs           # parameter definitions
-│   ├── state.rs            # presets / state
-│   ├── dsp/
-│   │   ├── mod.rs
-│   │   ├── engine.rs       # adaptive control / crossfade
-│   │   ├── phase_vocoder.rs
-│   │   ├── psola.rs        # monophonic refinement
-│   │   ├── formant.rs
-│   │   ├── pitch_detect.rs
-│   │   ├── key_detect.rs
-│   │   └── limiter.rs
-│   └── ui/
-│       ├── mod.rs
-│       ├── theme.rs
-│       ├── keyboard.rs
-│       ├── circle_of_fifths.rs
-│       └── widgets.rs
-└── tests/
-    ├── pitch.rs
-    ├── key.rs
-    └── latency.rs
+└── src/
+    ├── lib.rs              # plugin, editor, presets
+    ├── params.rs           # parameters and enums
+    └── dsp/
+        ├── mod.rs
+        ├── key_detector.rs
+        └── phase_vocoder.rs
 ```
 
 ---
@@ -639,7 +620,7 @@ cargo xtask bundle-universal keymorph --release
 - Monophonic detection: a sine is classified as monophonic and harmonic locking
   engages
 - Latency: difference between reported and measured values within 1 sample, using
-  an impulse response
+  an impulse response; all quality presets report 4096 samples
 - State: all parameters match after save → load
 - Presets: a captured snapshot round-trips through JSON without loss
 - Parameter range: no divergence when feeding boundary values, NaN, and Inf into
@@ -660,7 +641,19 @@ cargo xtask bundle-universal keymorph --release
 - clap-validator
 - Manual DAW checks (Logic / Live / Bitwig / Reaper)
 
-### 12.4 Acceptance criteria (v1.0)
+### 12.4 Known validation exceptions
+
+- CLAP state load: nih-plug's CLAP wrapper does not request a parameter value rescan
+  after loading state through the host state extension. VST3 is unaffected. This is
+  an upstream nih-plug issue.
+- CLAP malformed state: nih-plug's CLAP wrapper trusts the length prefix in the
+  state stream, so malformed state can trigger a large allocation. Hosts write
+  valid state, so this only affects fuzzing and corrupted files. This is an
+  upstream nih-plug issue.
+- VST3 passes pluginval at strictness level 10, including editor and parameter
+  tests.
+
+### 12.5 Acceptance criteria (v1.0)
 
 - [ ] Pitch shifting works on monophonic, polyphonic, and mixed material
 - [ ] Key detection and automatic transposition work
@@ -699,6 +692,8 @@ cargo xtask bundle-universal keymorph --release
 | Latency change when switching quality presets | Medium | Switch at block boundaries, report to the host, warn in the UI |
 | Build complexity from Signalsmith FFI | Low | Start with a pure Rust implementation and keep a swappable abstraction layer |
 | Notarization / signing operational burden | Low | Automate in CI, manage certificates in Secrets |
+| CLAP state-load rescan (upstream nih-plug) | Medium | VST3 validated; document and track an upstream fix |
+| CLAP malformed-state allocation (upstream nih-plug) | Low | Document; valid host state is unaffected |
 | Out-of-tune feel from scale snap | Medium | Separate snap amount from retune speed; make both preset-adjustable |
 
 ---

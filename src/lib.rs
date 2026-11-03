@@ -11,7 +11,7 @@ use nih_plug_egui::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::dsp::{KeyDetector, PitchShifter};
+use crate::dsp::{KeyDetector, PitchShifter, REPORTED_LATENCY_SAMPLES};
 use crate::params::{KeyMode, KeyMorphParams, LfoShape, ModTarget, Quality, SCALES, Scale};
 
 mod dsp;
@@ -200,10 +200,7 @@ impl Plugin for KeyMorph {
                         });
 
                         ui.add_space(4.0);
-                        ui.label(format!(
-                            "Latency: {} samples",
-                            params.quality.value().fft_size()
-                        ));
+                        ui.label(format!("Latency: {} samples", REPORTED_LATENCY_SAMPLES));
                         ui.add_space(4.0);
 
                         egui::ScrollArea::vertical()
@@ -502,7 +499,7 @@ impl Plugin for KeyMorph {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        context: &mut impl ProcessContext<Self>,
+        _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let Some(shifter) = self.shifter.as_mut() else {
             return ProcessStatus::Normal;
@@ -512,7 +509,6 @@ impl Plugin for KeyMorph {
         if quality != self.quality {
             shifter.set_quality(quality);
             self.quality = quality;
-            context.set_latency_samples(shifter.latency_samples());
         }
 
         let source_auto = self.params.source_auto.value();
