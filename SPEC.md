@@ -188,38 +188,28 @@ density, harmonic structure) and switches its internal processing automatically.
 
 ### 4.4 UI
 
-#### Layout (620 × 760 px, resizable)
+#### Layout (900 × 640 px, resizable)
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ KeyMorph   [Preset ◀ ▶]   [A/B]   [Undo] [Redo]      [Bypass]│
-├───────────────────────────────┬──────────────────────────────┤
-│                               │                              │
-│  ┌─────────────────────┐      │  QUALITY                     │
-│  │ KEY WHEEL / CIRCLE  │      │  (Low / Balanced / High)     │
-│  │ Source → Target     │      │  Latency: 42.7 ms            │
-│  └─────────────────────┘      │  CPU: 12%                    │
-│                               │                              │
-│  [C][C#][D] ... keyboard      │  PITCH                       │
-│  detected: A minor (87%)      │  Transpose [  0 ] st         │
-│                               │  Fine      [  0 ] ct         │
-│  SOURCE  [Auto ▼] [A ▼] min   │  Glide     [ 20 ] ms         │
-│  TARGET  [C ▼] [minor ▼]      │                              │
-│  SNAP    [====----] 60%       │  FORMANT                     │
-│  SPEED   [==------] 30 ms     │  Shift     [  0 ] st         │
-│                               │  Preserve  [====--] 70%      │
-│  LFO     [Sine ▼] 0.5 Hz      │                              │
-│  DEPTH   [==------] 0.0 st    │  MIX / GAIN                  │
-│                               │  Mix       [======] 100%     │
-│                               │  In/Out    [ 0.0 ] dB        │
-├───────────────────────────────┴──────────────────────────────┤
-│  IN ▮▮▮▮▯▯   OUT ▮▮▮▮▮▯   CPU 4%   [Limiter]   v0.1          │
-└──────────────────────────────────────────────────────────────┘
-```
+- Three columns: Key, Pitch, and Formant/Modulation/Output.
+- The center column contains a 220 px pitch knob with a continuous readout in
+  semitones and cents.
+- Top bar: A/B store and recall, undo, preset save and load, bypass, and latency.
+- The right column groups Formant, Modulation, and Output controls.
+- The control area scrolls when the window is smaller than the content.
+
+Knob interaction:
+
+- Drag vertically for coarse pitch changes.
+- Shift-drag for cent-level changes.
+- Scroll for fine steps; Shift-scroll for finer steps.
+- Double-click to reset to 0.
 
 #### UI requirements
 
 - Custom rendering with egui. Target 60 fps
+- The pitch knob is the primary control; it drives Transpose and Fine together
+- When the editor has focus, pass transport and other non-navigation keys to the
+  host unless a text field is active
 - Do not use the default egui look; apply a custom theme (colors, corner radii,
   spacing, fonts)
 - Draw the keyboard, circle of fifths, meters, and knobs from scratch with
