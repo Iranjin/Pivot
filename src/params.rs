@@ -171,7 +171,7 @@ impl ModTarget {
 
 #[derive(Params)]
 pub struct KeyMorphParams {
-    #[persist = "editor-state-v2"]
+    #[persist = "editor-state-v3"]
     pub editor_state: Arc<EguiState>,
     #[id = "bypass"]
     pub bypass: BoolParam,
@@ -226,7 +226,7 @@ pub struct KeyMorphParams {
 impl Default for KeyMorphParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(900, 640),
+            editor_state: EguiState::from_size(760, 520),
             bypass: BoolParam::new("Bypass", false),
             quality: EnumParam::new("Quality", Quality::Balanced),
             transpose: IntParam::new("Transpose", 0, IntRange::Linear { min: -24, max: 24 })

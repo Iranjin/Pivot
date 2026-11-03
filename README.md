@@ -5,6 +5,7 @@ Real-time pitch and key shifting audio effect for macOS.
 ## Features
 
 - Large central pitch knob with continuous semitone and cent control
+- Focused main view with an Advanced section for secondary controls
 - Phase-vocoder pitch shift, ±24 semitones and ±100 cents
 - Quality presets with 1024, 2048, or 4096 point FFT windows
 - Formant shift and preservation

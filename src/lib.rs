@@ -143,43 +143,29 @@ impl Plugin for KeyMorph {
             },
             move |ctx, setter, state| {
                 ResizableWindow::new("keymorph-ui")
-                    .min_size(Vec2::new(820.0, 560.0))
+                    .min_size(Vec2::new(700.0, 460.0))
                     .show(ctx, egui_state.as_ref(), |ui| {
-                        ui.heading(egui::RichText::new("KeyMorph").size(22.0));
-                        ui.label("Real-time pitch and key shifting");
-                        ui.add_space(2.0);
-                        ui.separator();
-
                         ui.horizontal(|ui| {
-                            if ui.button("Store A").clicked() {
-                                state.slot_a = Some(Snapshot::capture(&params));
-                                state.message = String::from("Stored A");
-                            }
-                            if ui.button("Recall A").clicked()
-                                && let Some(snapshot) = state.slot_a
-                            {
-                                push_undo(state, &params);
-                                snapshot.apply(&params, setter);
-                                state.message = String::from("Recalled A");
-                            }
-                            if ui.button("Store B").clicked() {
-                                state.slot_b = Some(Snapshot::capture(&params));
-                                state.message = String::from("Stored B");
-                            }
-                            if ui.button("Recall B").clicked()
-                                && let Some(snapshot) = state.slot_b
-                            {
-                                push_undo(state, &params);
-                                snapshot.apply(&params, setter);
-                                state.message = String::from("Recalled B");
-                            }
-                            if ui.button("Undo").clicked()
-                                && let Some(snapshot) = state.undo.pop()
-                            {
-                                snapshot.apply(&params, setter);
-                                state.message = String::from("Undo");
-                            }
+                            ui.heading(egui::RichText::new("KeyMorph").size(20.0));
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let mut bypassed = params.bypass.value();
+                                    if ui.checkbox(&mut bypassed, "Bypass").changed() {
+                                        set_param(setter, &params.bypass, bypassed);
+                                    }
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "Latency: {} samples",
+                                            REPORTED_LATENCY_SAMPLES
+                                        ))
+                                        .small()
+                                        .color(muted()),
+                                    );
+                                },
+                            );
                         });
+
                         ui.horizontal(|ui| {
                             if ui.button("Save Preset").clicked() {
                                 save_preset(&params, &mut state.message);
@@ -192,27 +178,44 @@ impl Plugin for KeyMorph {
                             }
                             ui.label(&state.message);
                         });
-                        ui.horizontal(|ui| {
-                            let mut bypassed = params.bypass.value();
-                            if ui.checkbox(&mut bypassed, "Bypass").changed() {
-                                set_param(setter, &params.bypass, bypassed);
-                            }
-                            ui.separator();
-                            ui.label(format!("Latency: {} samples", REPORTED_LATENCY_SAMPLES));
-                        });
                         ui.separator();
 
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                ui.columns(3, |columns| {
-                                    key_section(&mut columns[0], &params, setter, &detected);
-                                    pitch_section(&mut columns[1], &params, setter);
-                                    formant_section(&mut columns[2], &params, setter);
-                                    columns[2].separator();
-                                    modulation_section(&mut columns[2], &params, setter);
-                                    columns[2].separator();
-                                    output_section(&mut columns[2], &params, setter);
+                                let panel_height = ui.available_height().clamp(320.0, 380.0);
+                                ui.horizontal_top(|ui| {
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(150.0, panel_height),
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        |ui| key_panel(ui, &params, setter, &detected),
+                                    );
+                                    ui.separator();
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(360.0, panel_height),
+                                        egui::Layout::top_down(egui::Align::Center),
+                                        |ui| pitch_panel(ui, &params, setter),
+                                    );
+                                    ui.separator();
+                                    ui.allocate_ui_with_layout(
+                                        Vec2::new(160.0, panel_height),
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        |ui| quick_panel(ui, &params, setter),
+                                    );
+                                });
+
+                                ui.add_space(4.0);
+                                ui.separator();
+                                ui.collapsing("Advanced", |ui| {
+                                    ui.columns(3, |columns| {
+                                        pitch_extras(&mut columns[0], &params, setter);
+                                        columns[0].separator();
+                                        formant_advanced(&mut columns[0], &params, setter);
+                                        modulation_section(&mut columns[1], &params, setter);
+                                        output_section(&mut columns[2], &params, setter);
+                                        columns[2].separator();
+                                        ab_section(&mut columns[2], &params, setter, state);
+                                    });
                                 });
                             });
                     });
@@ -256,7 +259,7 @@ impl Plugin for KeyMorph {
         let source_root = self.params.source_root.value().clamp(0, 11) as u8;
         let target_root = self.params.target_root.value().clamp(0, 11) as u8;
         self.pitch_semitones = self.params.transpose.value() as f32
-            + self.params.fine.value()
+            + cents_to_semitones(self.params.fine.value())
             + shortest_key_offset(source_root, target_root) as f32;
         self.snap_semitones = 0.0;
         self.active_mix = if self.params.bypass.value() { 0.0 } else { 1.0 };
@@ -342,7 +345,7 @@ impl Plugin for KeyMorph {
             }
 
             let snap_amount = self.params.snap_amount.smoothed.next() * 0.01;
-            let fine = self.params.fine.smoothed.next();
+            let fine = cents_to_semitones(self.params.fine.smoothed.next());
 
             let lfo_depth = self.params.lfo_depth.smoothed.next();
             self.lfo_phase += lfo_rate / self.sample_rate;
@@ -452,7 +455,7 @@ fn muted() -> egui::Color32 {
     egui::Color32::from_rgb(140, 146, 160)
 }
 
-fn key_section(
+fn key_panel(
     ui: &mut egui::Ui,
     params: &KeyMorphParams,
     setter: &ParamSetter,
@@ -465,56 +468,39 @@ fn key_section(
     let detected_root = (packed & 0xF) as usize;
     let detected_minor = (packed >> 4) & 1 == 1;
     let detected_confidence = (packed >> 8) & 0x7F;
-    let detected_text = if detected_confidence == 0 {
-        String::from("Detected: —")
+
+    ui.label(egui::RichText::new("Detected").small().color(muted()));
+    if detected_confidence == 0 {
+        ui.label(egui::RichText::new("—").strong());
     } else {
-        format!(
-            "Detected: {} {} ({}%)",
-            NOTE_NAMES[detected_root.min(11)],
-            if detected_minor { "minor" } else { "major" },
-            detected_confidence
-        )
-    };
-    ui.label(detected_text);
+        ui.label(
+            egui::RichText::new(format!(
+                "{} {} ({}%)",
+                NOTE_NAMES[detected_root.min(11)],
+                if detected_minor { "minor" } else { "major" },
+                detected_confidence
+            ))
+            .strong(),
+        );
+    }
     ui.add_space(4.0);
 
-    egui::Grid::new("key-grid")
-        .num_columns(2)
-        .spacing([8.0, 6.0])
-        .show(ui, |ui| {
-            ui.label("Auto");
-            let mut source_auto = params.source_auto.value();
-            if ui.checkbox(&mut source_auto, "").changed() {
-                set_param(setter, &params.source_auto, source_auto);
-            }
-            ui.end_row();
+    let mut source_auto = params.source_auto.value();
+    if ui.checkbox(&mut source_auto, "Auto").changed() {
+        set_param(setter, &params.source_auto, source_auto);
+    }
 
-            ui.label("Source");
-            ui.horizontal(|ui| {
-                note_combo(ui, "source-root", &params.source_root, setter);
-                mode_combo(ui, "source-mode", &params.source_mode, setter);
-            });
-            ui.end_row();
+    ui.label(egui::RichText::new("Source").small().color(muted()));
+    ui.horizontal(|ui| {
+        note_combo(ui, "source-root", &params.source_root, setter);
+        mode_combo(ui, "source-mode", &params.source_mode, setter);
+    });
 
-            ui.label("Target");
-            ui.horizontal(|ui| {
-                note_combo(ui, "target-root", &params.target_root, setter);
-                mode_combo(ui, "target-mode", &params.target_mode, setter);
-            });
-            ui.end_row();
-
-            ui.label("Snap");
-            ui.add(widgets::ParamSlider::for_param(&params.snap_amount, setter).with_width(150.0));
-            ui.end_row();
-
-            ui.label("Retune");
-            ui.add(widgets::ParamSlider::for_param(&params.retune_speed, setter).with_width(150.0));
-            ui.end_row();
-
-            ui.label("Scale");
-            scale_combo(ui, "scale", &params.scale, setter);
-            ui.end_row();
-        });
+    ui.label(egui::RichText::new("Target").small().color(muted()));
+    ui.horizontal(|ui| {
+        note_combo(ui, "target-root", &params.target_root, setter);
+        mode_combo(ui, "target-mode", &params.target_mode, setter);
+    });
 
     let source_root = if params.source_auto.value() && detected_confidence > 50 {
         detected_root as u8
@@ -531,69 +517,80 @@ fn key_section(
     );
 }
 
-fn pitch_section(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
-    ui.vertical_centered(|ui| {
-        ui.heading("PITCH");
-    });
-    ui.add_space(4.0);
+fn pitch_panel(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
+    ui.label(egui::RichText::new("PITCH").small().color(muted()));
+    ui.add_space(2.0);
 
-    let mut pitch = params.transpose.value() as f32 + params.fine.value() * 0.01;
-    ui.vertical_centered(|ui| {
-        let response = pitch_knob(ui, &mut pitch);
-        if response.changed() {
-            let semitones = pitch.trunc();
-            let cents = (pitch - semitones) * 100.0;
-            set_param(setter, &params.transpose, semitones as i32);
-            set_param(setter, &params.fine, cents);
-        }
+    let mut pitch = params.transpose.value() as f32 + cents_to_semitones(params.fine.value());
+    let response = pitch_knob(ui, &mut pitch);
+    if response.changed() {
+        let semitones = pitch.trunc();
+        let cents = (pitch - semitones) * 100.0;
+        set_param(setter, &params.transpose, semitones as i32);
+        set_param(setter, &params.fine, cents);
+    }
 
-        ui.label(
-            egui::RichText::new(format!("{pitch:+.2} st"))
-                .size(28.0)
-                .strong(),
-        );
-        ui.label(
-            egui::RichText::new("Drag · Shift = cents · Double-click = reset")
-                .small()
-                .color(muted()),
-        );
-    });
+    ui.add_space(2.0);
+    ui.label(
+        egui::RichText::new("Drag · Shift = cents · Double-click = reset")
+            .small()
+            .color(muted()),
+    );
+}
 
-    ui.add_space(6.0);
-    egui::Grid::new("pitch-grid")
+fn quick_panel(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
+    ui.heading("QUICK");
+    egui::Grid::new("quick-grid")
+        .num_columns(1)
+        .spacing([0.0, 6.0])
+        .show(ui, |ui| {
+            ui.label(egui::RichText::new("Scale Snap").small().color(muted()));
+            ui.add(widgets::ParamSlider::for_param(&params.snap_amount, setter).with_width(130.0))
+                .on_hover_text("Scale snap amount");
+
+            ui.label(egui::RichText::new("Mix").small().color(muted()));
+            ui.add(widgets::ParamSlider::for_param(&params.mix, setter).with_width(130.0));
+
+            ui.label(egui::RichText::new("Glide").small().color(muted()));
+            ui.add(widgets::ParamSlider::for_param(&params.glide, setter).with_width(130.0));
+
+            ui.label(egui::RichText::new("Formant").small().color(muted()));
+            ui.add(
+                widgets::ParamSlider::for_param(&params.formant_preserve, setter).with_width(130.0),
+            );
+        });
+}
+
+fn pitch_extras(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
+    ui.heading("PITCH");
+    egui::Grid::new("pitch-extra-grid")
         .num_columns(2)
         .spacing([8.0, 6.0])
         .show(ui, |ui| {
             ui.label("Fine");
-            ui.add(widgets::ParamSlider::for_param(&params.fine, setter).with_width(150.0));
-            ui.end_row();
-
-            ui.label("Glide");
-            ui.add(widgets::ParamSlider::for_param(&params.glide, setter).with_width(150.0));
-            ui.end_row();
-
-            ui.label("Mix");
-            ui.add(widgets::ParamSlider::for_param(&params.mix, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.fine, setter).with_width(130.0));
             ui.end_row();
         });
 }
 
-fn formant_section(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
-    ui.heading("FORMANT");
+fn formant_advanced(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSetter) {
+    ui.heading("FORMANT / SCALE");
     egui::Grid::new("formant-grid")
         .num_columns(2)
         .spacing([8.0, 6.0])
         .show(ui, |ui| {
             ui.label("Shift");
             ui.add(
-                widgets::ParamSlider::for_param(&params.formant_shift, setter).with_width(150.0),
+                widgets::ParamSlider::for_param(&params.formant_shift, setter).with_width(130.0),
             );
             ui.end_row();
 
-            ui.label("Preserve");
-            ui.add(
-                widgets::ParamSlider::for_param(&params.formant_preserve, setter).with_width(150.0),
-            );
+            ui.label("Retune");
+            ui.add(widgets::ParamSlider::for_param(&params.retune_speed, setter).with_width(130.0));
+            ui.end_row();
+
+            ui.label("Scale");
+            scale_combo(ui, "scale", &params.scale, setter);
             ui.end_row();
         });
 }
@@ -609,15 +606,15 @@ fn modulation_section(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &Param
             ui.end_row();
 
             ui.label("Rate");
-            ui.add(widgets::ParamSlider::for_param(&params.lfo_rate, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.lfo_rate, setter).with_width(130.0));
             ui.end_row();
 
             ui.label("Depth");
-            ui.add(widgets::ParamSlider::for_param(&params.lfo_depth, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.lfo_depth, setter).with_width(130.0));
             ui.end_row();
 
             ui.label("Phase");
-            ui.add(widgets::ParamSlider::for_param(&params.lfo_phase, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.lfo_phase, setter).with_width(130.0));
             ui.end_row();
 
             ui.label("Target");
@@ -637,11 +634,11 @@ fn output_section(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSett
             ui.end_row();
 
             ui.label("Input");
-            ui.add(widgets::ParamSlider::for_param(&params.input_gain, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.input_gain, setter).with_width(130.0));
             ui.end_row();
 
             ui.label("Output");
-            ui.add(widgets::ParamSlider::for_param(&params.output_gain, setter).with_width(150.0));
+            ui.add(widgets::ParamSlider::for_param(&params.output_gain, setter).with_width(130.0));
             ui.end_row();
 
             ui.label("Limiter");
@@ -653,11 +650,50 @@ fn output_section(ui: &mut egui::Ui, params: &KeyMorphParams, setter: &ParamSett
         });
 }
 
+fn ab_section(
+    ui: &mut egui::Ui,
+    params: &KeyMorphParams,
+    setter: &ParamSetter,
+    state: &mut EditorState,
+) {
+    ui.heading("A/B");
+    ui.horizontal_wrapped(|ui| {
+        if ui.button("Store A").clicked() {
+            state.slot_a = Some(Snapshot::capture(params));
+            state.message = String::from("Stored A");
+        }
+        if ui.button("Recall A").clicked()
+            && let Some(snapshot) = state.slot_a
+        {
+            push_undo(state, params);
+            snapshot.apply(params, setter);
+            state.message = String::from("Recalled A");
+        }
+        if ui.button("Store B").clicked() {
+            state.slot_b = Some(Snapshot::capture(params));
+            state.message = String::from("Stored B");
+        }
+        if ui.button("Recall B").clicked()
+            && let Some(snapshot) = state.slot_b
+        {
+            push_undo(state, params);
+            snapshot.apply(params, setter);
+            state.message = String::from("Recalled B");
+        }
+        if ui.button("Undo").clicked()
+            && let Some(snapshot) = state.undo.pop()
+        {
+            snapshot.apply(params, setter);
+            state.message = String::from("Undo");
+        }
+    });
+}
+
 fn quality_combo(ui: &mut egui::Ui, id: &str, param: &EnumParam<Quality>, setter: &ParamSetter) {
     let current = param.value();
     egui::ComboBox::from_id_salt(id)
         .selected_text(format!("{current:?}"))
-        .width(120.0)
+        .width(110.0)
         .show_ui(ui, |ui| {
             for value in [Quality::Low, Quality::Balanced, Quality::High] {
                 if ui
@@ -830,6 +866,10 @@ fn pack_key(root: u8, mode: KeyMode, confidence: f32) -> u32 {
     (root as u32 & 0xF) | (((mode == KeyMode::Minor) as u32) << 4) | (confidence << 8)
 }
 
+fn cents_to_semitones(cents: f32) -> f32 {
+    cents * 0.01
+}
+
 impl Snapshot {
     fn capture(params: &KeyMorphParams) -> Self {
         Self {
@@ -979,6 +1019,12 @@ mod tests {
         assert_eq!(decoded.quality, snapshot.quality);
         assert_eq!(decoded.scale, snapshot.scale);
         assert_eq!(decoded.source_mode, snapshot.source_mode);
+    }
+
+    #[test]
+    fn converts_cents_to_semitones() {
+        assert!((cents_to_semitones(50.0) - 0.5).abs() < 1.0e-6);
+        assert!((cents_to_semitones(-100.0) + 1.0).abs() < 1.0e-6);
     }
 
     #[test]

@@ -188,13 +188,14 @@ density, harmonic structure) and switches its internal processing automatically.
 
 ### 4.4 UI
 
-#### Layout (900 × 640 px, resizable)
+#### Layout (760 × 520 px, resizable)
 
-- Three columns: Key, Pitch, and Formant/Modulation/Output.
-- The center column contains a 220 px pitch knob with a continuous readout in
-  semitones and cents.
-- Top bar: A/B store and recall, undo, preset save and load, bypass, and latency.
-- The right column groups Formant, Modulation, and Output controls.
+- Main view: Key panel, a central pitch knob of up to 300 px, and a Quick panel
+  with Scale Snap, Mix, Glide, and Formant controls.
+- The knob readout is drawn inside the knob in semitones and cents.
+- Top bar: preset save and load, bypass, and latency.
+- Advanced (collapsed by default): Fine, Formant Shift, Retune, Scale, LFO,
+  Quality, Input/Output, Limiter, and A/B controls.
 - The control area scrolls when the window is smaller than the content.
 
 Knob interaction:
