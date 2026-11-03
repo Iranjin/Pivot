@@ -495,6 +495,7 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 | Crate | Purpose | License |
 |---|---|---|
 | `nih_plug` (git, pinned revision) | Plugin framework | ISC |
+| `nih_plug_xtask` (git, pinned revision) | Plugin bundler | ISC |
 | `nih_plug_egui` | egui editor | ISC |
 | `egui` (via `nih_plug_egui`; `eframe` for standalone tests) | UI | MIT / Apache-2.0 |
 | `realfft` | Real FFT | MIT |
@@ -539,10 +540,13 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 
 ```
 KeyMorph/
+├── .cargo/config.toml      # cargo xtask alias
 ├── Cargo.toml
 ├── SPEC.md
 ├── README.md
+├── bundler.toml            # bundle display name
 ├── xtask/                  # bundling
+│   ├── Cargo.toml
 │   └── src/main.rs
 ├── src/
 │   ├── lib.rs              # plugin entry
@@ -582,8 +586,8 @@ cargo build
 
 # Build bundles
 cargo xtask bundle keymorph --release
-# → target/bundled/keymorph.vst3
-# → target/bundled/keymorph.clap
+# → target/bundled/KeyMorph.vst3
+# → target/bundled/KeyMorph.clap
 ```
 
 ### 11.2 Release

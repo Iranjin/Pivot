@@ -1,6 +1,16 @@
 [package]
-name = "KeyMorph"
+name = "keymorph"
 version = "0.1.0"
 edition = "2024"
+description = "Real-time pitch and key shifting effect"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683", features = ["assert_process_allocs"] }
+
+[workspace]
+members = ["xtask"]
+resolver = "3"
