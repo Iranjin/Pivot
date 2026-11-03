@@ -48,3 +48,4 @@ Bundles are written to `target/bundled/`.
 
 - [SPEC.md](SPEC.md) is the source of truth for behavior.
 - [AGENTS.md](AGENTS.md) contains project instructions.
+- [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) lists dependency notices.
