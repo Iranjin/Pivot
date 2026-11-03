@@ -10,16 +10,6 @@ pub enum Quality {
     High,
 }
 
-impl Quality {
-    pub fn fft_size(self) -> usize {
-        match self {
-            Quality::Low => 1024,
-            Quality::Balanced => 2048,
-            Quality::High => 4096,
-        }
-    }
-}
-
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum KeyMode {
     #[default]

@@ -1,5 +1,5 @@
+mod engine;
 mod key_detector;
-mod phase_vocoder;
 
+pub use engine::PitchEngine;
 pub use key_detector::KeyDetector;
-pub use phase_vocoder::{PitchShifter, REPORTED_LATENCY_SAMPLES};

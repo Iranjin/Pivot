@@ -44,8 +44,7 @@ As the name suggests, morphing the key is the core purpose.
 
 - Stereo-in / stereo-out audio effect
 - Pitch shift (±24 semitones, ±100 cents)
-- Single adaptive pitch-shift engine (automatically distinguishes monophonic,
-  polyphonic, and mixed material)
+- Single Signalsmith Stretch pitch-shift engine
 - Key detection (automatic / manual) and key-based transposition
 - Scale snap (most effective on monophonic and vocal sources)
 - Formant preservation / shift
@@ -118,29 +117,24 @@ As the name suggests, morphing the key is the core purpose.
 
 #### FR-4 Single engine and quality presets
 
-There is no user-facing mode switch per source type. One adaptive engine
-continuously analyzes the input (monophonic / polyphonic / mixed, transient
-density, harmonic structure) and switches its internal processing automatically.
+There is no user-facing mode switch. The engine uses Signalsmith Stretch, which
+handles monophonic, polyphonic, and mixed material without a mode switch.
 
-| Quality preset | STFT window | Primary use |
+| Quality preset | Configuration | Primary use |
 |---|---|---|
-| Low | 1024 | Lowest CPU |
-| Balanced | 2048 | Middle ground |
-| High | 4096 | Default; highest quality |
+| Low | `preset_cheaper` | Lowest CPU |
+| Balanced | `preset_default` | Middle ground |
+| High | 0.14 s block, 0.02 s interval | Default; highest quality |
 
-- In strongly monophonic sections, use pitch-synchronous harmonic phase locking to
-  prioritize vocal naturalness
-- In polyphonic and mixed sections, lock phases to spectral peaks
-- Switch locking modes with hysteresis based on a smoothed monophonicity estimate
-- Quality presets do not change reported latency; all paths are padded to 4096
-  samples
+- The plugin reports a fixed latency equal to the largest preset latency; shorter
+  presets are padded so the host never needs a latency update
+- Quality presets trade CPU and artifacts, not latency
 
 #### FR-5 Formant control
 
 - `Formant`: −12 to +12 semitones (shifts formants only)
 - `Formant Preserve`: 0–100% (100 = keep formant positions after pitch shifting)
-- Estimate the spectral envelope and pre-warp it so formants land at the requested
-  position after resampling
+- Map the controls to Signalsmith Stretch's formant factor with pitch compensation
 - Use the same processing chain for monophonic, polyphonic, and mixed material
 - Formant shift operates independently of pitch shift
 
@@ -243,10 +237,9 @@ Knob interaction:
 
 ### 5.2 Performance
 
-- Latency (48 kHz, the value reported to the host): 4096 samples (85.3 ms) for
+- Latency (48 kHz, the value reported to the host): 6720 samples (140 ms) for
   every quality preset
-  - The engine pads the wet path to 4096 samples and delays the dry path by the
-    same amount
+  - The engine uses the largest preset latency and pads shorter presets to it
   - Quality presets trade CPU and artifacts, not latency
 
 - CPU: Apple M1, 48 kHz / 128 samples, Balanced: ≤ 15% for one instance
@@ -281,71 +274,51 @@ Knob interaction:
 ```
 Input (stereo)
   │
-  ├─ Input Gain ──► Pitch / Content Analyzer ──► Key Detector
-  │                                                   │
-  ▼                                                   ▼
-┌──────────────────────────────────────────────────────────┐
-│ Adaptive Pitch Shift Engine                               │
-│   ├─ Harmonic phase locking (monophonic passages)         │
-│   └─ Spectral-peak phase locking (polyphonic / mix)       │
-│        + formant envelope correction                      │
-└──────────────────────────────────────────────────────────┘
+  ├─ Input Gain ──► Key / F0 Analyzer ──► Key Detector
   │
-  ├─ Formant Shift
-  ├─ LFO / MIDI Pitch Modulation
+  ▼
+Signalsmith Stretch (pitch + formant)
+  │
+  ├─ LFO Pitch Modulation
   ├─ Dry/Wet Mix
   ├─ Output Gain
   └─ Safety Limiter ──► Output (stereo)
 ```
 
-### 6.2 Base engine (STFT phase vocoder)
+### 6.2 Pitch engine (Signalsmith Stretch)
 
-1. STFT (Hann window, 75% overlap, window length depends on the quality preset)
-2. Compute each bin's instantaneous frequency from phase differences
-3. Time-stretch, then resample at the target pitch ratio
-4. Align phases around spectral peaks with identity phase locking
-5. Reset phase when a transient is detected to avoid smearing attacks
-6. Separate the spectral envelope and apply formant correction
-7. Resynthesize with iSTFT
+- Signalsmith Stretch (MIT) handles pitch shifting and formant correction
+- Audio is processed in fixed 64-frame chunks; pitch and formant settings are
+  updated per chunk
+- Quality presets:
+  - Low: `preset_cheaper`
+  - Balanced: `preset_default`
+  - High: 0.14 s block, 0.02 s interval
+- The engine reports the largest preset latency and pads the shorter presets to it
+- The dry path is delayed by the same amount so the mix stays aligned
 
-- Maintain stereo phase coherence (use the same phase correction for L/R)
-- Process the low band (below 200 Hz) separately because the phase vocoder
-  affects it strongly
-- This is the base path for all source material
+### 6.3 Formant mapping
 
-### 6.3 Adaptive path (monophonic refinement)
+- `preserve` is 0–1, `F_shift = 2^(formant/12)`, and `P = 2^(pitch/12)`
+- Desired output formant ratio = `F_shift * P^(1-preserve)`
+- Set the Signalsmith formant multiplier to `F = P^preserve / F_shift` with
+  `compensate_pitch = true`
+- `preserve = 1` keeps formants in place; `preserve = 0` lets them follow the pitch
+- When `preserve = 0` and `formant = 0`, disable formant processing entirely
 
-- Evaluate monophonicity on every analysis frame
-  - Metrics: spectral flatness and harmonic energy ratio
-- Estimate F0 with a harmonic product spectrum (40–800 Hz, five harmonics)
-- For strongly monophonic sections:
-  - Build phase-locking targets from the F0 harmonics instead of raw spectral peaks
-  - Keep the same phase vocoder and latency; only the locking targets change
-- For weakly monophonic sections:
-  - Use the spectral-peak locking from 6.2
-- Enable harmonic locking above 0.65 confidence and disable it below 0.45
-- Do not ask the user to choose a mode
+### 6.4 Mono / polyphonic handling
 
-### 6.4 Formant control
-
-- Estimate the spectral envelope with a 1/3-octave moving average over the
-  magnitude spectrum
-- Pre-warp the envelope by `W = 2^(formant/12) * r^(-preserve)` in the stretched
-  domain, where `r` is the pitch ratio
-- Resampling by `r` then lands the formants at the requested position
-- Apply the ratio between the warped and original envelopes as a smooth gain curve
-  (clamped to ±12 dB) before the inverse STFT
-- `preserve = 0` lets formants follow the pitch shift; `preserve = 1` keeps them in
-  place
+- Signalsmith Stretch processes monophonic, polyphonic, and mixed material without
+  a user-facing mode switch
+- The key analyzer still estimates F0 and monophonicity for scale snap
+- No mode switch is exposed in the UI
 
 ### 6.5 Latency management
 
-- The engine reports a fixed latency of 4096 samples via `set_latency_samples()`
-- Quality presets do not change the reported latency; the wet path is padded to
-  4096 samples and the dry path is delayed by the same amount
-- To compensate, delay the dry signal by the same amount so the mix stays
-  phase-aligned
-- Do not offer a zero-latency mode (prioritize quality)
+- At 48 kHz the largest preset latency is 6720 samples (140 ms)
+- Report that value once during initialization; quality changes do not change it
+- Pad the wet path of shorter presets and delay the dry path by the same amount
+- Do not offer a zero-latency mode
 
 ### 6.6 Key detection details
 
@@ -356,6 +329,9 @@ Input (stereo)
   classes
 - Tuning: estimate the A4 offset from the strongest low-frequency peak (±50 cents)
   and compensate the chroma mapping
+- F0: harmonic product spectrum (40–800 Hz, five harmonics) with parabolic
+  refinement
+- Monophonicity: spectral flatness and harmonic energy, smoothed over frames
 - Key scoring: Pearson correlation against Krumhansl-Kessler Major / Minor profiles
   for all 24 keys
 - Smoothing: exponential chroma smoothing (about 1 second time constant)
@@ -444,7 +420,7 @@ Input (stereo)
 ### 8.4 Host integration
 
 - Report latency accurately
-- Tail: 200 ms (STFT residue)
+- Tail: 200 ms (engine residue)
 - Bypass passes audio through completely (and stops CPU work)
 - Reinitialize the engine on sample-rate changes
 - Offline rendering (higher quality) is planned for v1.1
@@ -502,16 +478,12 @@ is equal to or greater than ImGui's. It is not constrained to the default look.
 | `egui` (via `nih_plug_egui`; `eframe` for standalone tests) | UI | MIT / Apache-2.0 |
 | `realfft` | Real FFT | MIT |
 | `num-complex` | Complex number types | MIT / Apache-2.0 |
-| `rustfft` | FFT | MIT / Apache-2.0 |
+| `signalsmith-stretch` | Pitch/time engine | MIT |
 | `serde` / `serde_json` | State persistence | MIT / Apache-2.0 |
-| `atomic_float` | Parameter sharing | MIT / Apache-2.0 |
-| `wide` | SIMD | Zlib / Apache-2.0 |
 | `rfd` | File dialogs (presets) | MIT |
 
-- Implement the pitch shifter itself in-house by default
-- Evaluate `signalsmith-stretch` (MIT) for higher quality
-  - Pros: high quality, polyphonic support, proven in practice
-  - Cons: C++ FFI, more complex builds, CPU characteristics need validation
+- The pitch shifter uses Signalsmith Stretch (MIT)
+- Build requires a C++ compiler and libclang (for bindgen)
 - Do not use the `rubberband` crate because it is GPL
 
 ---
@@ -556,10 +528,11 @@ KeyMorph/
 └── src/
     ├── lib.rs              # plugin, editor, presets
     ├── params.rs           # parameters and enums
+    ├── ui.rs               # pitch knob widget
     └── dsp/
         ├── mod.rs
-        ├── key_detector.rs
-        └── phase_vocoder.rs
+        ├── engine.rs       # Signalsmith Stretch wrapper
+        └── key_detector.rs
 ```
 
 ---
@@ -606,12 +579,13 @@ cargo xtask bundle-universal keymorph --release
 - Key detection: at least 90% correct on synthetic chords and real samples for all
   24 keys
 - Scale snap: a detuned note is corrected to the nearest scale degree
-- FFT / iSTFT: resynthesis error below −120 dBFS
-- Formant control: a formant shift moves spectral energy in the expected direction
-- Monophonic detection: a sine is classified as monophonic and harmonic locking
-  engages
+- FFT / iSTFT: covered by Signalsmith Stretch
+- Engine latency: impulse peak at the reported latency (±1 sample)
+- Pitch shift: 440 Hz → 880 Hz within 10 Hz after the latency
+- Formant control: formant shift moves spectral energy in the expected direction
+- Monophonic detection: a sine is classified as monophonic and reports its F0
 - Latency: difference between reported and measured values within 1 sample, using
-  an impulse response; all quality presets report 4096 samples
+  an impulse response; all quality presets report 6720 samples at 48 kHz
 - State: all parameters match after save → load
 - Presets: a captured snapshot round-trips through JSON without loss
 - Parameter range: no divergence when feeding boundary values, NaN, and Inf into
@@ -622,7 +596,7 @@ cargo xtask bundle-universal keymorph --release
 - Bit-identical to dry at pitch 0 / Mix 100% (null test)
 - Click noise below −60 dBFS when shifting ±24 semitones
 - Output stays at or below −0.3 dBFS when the limiter is enabled
-- No dropouts or clicks when the adaptive path switches
+- No dropouts or clicks when changing quality presets
 - Works at sample rates from 44.1 to 192 kHz
 - Works with buffers from 32 to 2048 samples
 
@@ -662,8 +636,8 @@ cargo xtask bundle-universal keymorph --release
 | Phase | Content | Estimate |
 |---|---|---|
 | M0 | Project skeleton, VST3 / CLAP output, bypass + gain | 1 week |
-| M1 | Phase-vocoder pitch shift, parameters, latency reporting | 2–3 weeks |
-| M2 | Pitch-synchronous harmonic locking, formant control | 2–3 weeks |
+| M1 | Signalsmith Stretch integration, parameters, latency reporting | 2–3 weeks |
+| M2 | Formant mapping, key detection, scale snap | 2–3 weeks |
 | M3 | Key detection, key UI, scale snap | 2 weeks |
 | M4 | LFO, limiter, presets, A/B, UI polish | 1–2 weeks |
 | M5 | Validation, optimization, Universal Binary, signing / notarization, release | 1–2 weeks |
@@ -674,14 +648,12 @@ cargo xtask bundle-universal keymorph --release
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Phase-vocoder quality (phasiness, transient smearing) | High | Phase locking, transient reset, comparative evaluation against Signalsmith |
-| F0 misdetection in monophonic passages | Medium | Confidence gating, hysteresis, fallback to spectral-peak locking |
-| Formant envelope warping artifacts | Medium | 1/3-octave smoothing, gain clamp, preset adjustment |
-| CPU load on mixed material | Medium | Quality presets, SIMD, band splitting, reduced update rates |
+| F0 misdetection in monophonic passages | Medium | Confidence gating, smoothing, manual source key |
+| Formant artifacts at large shifts | Medium | Preserve slider, Signalsmith formant compensation |
+| CPU load on mixed material | Medium | Quality presets, High only when needed |
 | Relative-key misdetection (Am ↔ C) | Medium | Show confidence, allow manual override, tune smoothing |
-| Latency vs. quality trade-off | Medium | Make quality presets explicit, show measured values in the UI, no zero-latency mode |
-| Latency change when switching quality presets | Medium | Switch at block boundaries, report to the host, warn in the UI |
-| Build complexity from Signalsmith FFI | Low | Start with a pure Rust implementation and keep a swappable abstraction layer |
+| Latency vs. quality trade-off | Medium | Fixed 140 ms reported latency at 48 kHz, host compensation, no zero-latency mode |
+| Build complexity from Signalsmith FFI | Low | Pinned crate, prebuilt buffers, CI build check |
 | Notarization / signing operational burden | Low | Automate in CI, manage certificates in Secrets |
 | CLAP state-load rescan (upstream nih-plug) | Medium | VST3 validated; document and track an upstream fix |
 | CLAP malformed-state allocation (upstream nih-plug) | Low | Document; valid host state is unaffected |
@@ -696,7 +668,6 @@ cargo xtask bundle-universal keymorph --release
 - [ ] Price / distribution channel (direct / App Store / free)
 - [ ] Include AU support in v1.1?
 - [ ] Include harmony generation in v1.0?
-- [ ] Adopt Signalsmith Stretch or continue with a pure Rust implementation?
 - [ ] Visual tone of the UI (colors, fonts, texture)
 - [ ] Custom scale editor (per-note on/off)
 - [ ] MIDI pitch bend / CC modulation
@@ -711,6 +682,6 @@ cargo xtask bundle-universal keymorph --release
 - CLAP: https://github.com/free-audio/clap
 - VST3 SDK: https://github.com/steinbergmedia/vst3sdk
 - Signalsmith Stretch: https://github.com/Signalsmith-Audio/signalsmith-stretch
+- Signalsmith Linear: https://github.com/Signalsmith-Audio/linear
 - Krumhansl-Schmuckler key profiles: Krumhansl, C. L. (1990), *Cognitive Foundations of Musical Pitch*
 - Harmonic product spectrum: Schroeder (1968), *Period histogram and product spectrum: New methods for fundamental-frequency measurement*
-- Phase vocoder: Laroche & Dolson (1999), *Improved phase vocoder time-scale modification of audio*

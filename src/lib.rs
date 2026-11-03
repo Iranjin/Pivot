@@ -11,7 +11,7 @@ use nih_plug_egui::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::dsp::{KeyDetector, PitchShifter, REPORTED_LATENCY_SAMPLES};
+use crate::dsp::{KeyDetector, PitchEngine};
 use crate::params::{KeyMode, KeyMorphParams, LfoShape, ModTarget, Quality, SCALES, Scale};
 use crate::ui::pitch_knob;
 
@@ -64,9 +64,10 @@ struct EditorState {
 struct KeyMorph {
     params: Arc<KeyMorphParams>,
     sample_rate: f32,
-    shifter: Option<PitchShifter>,
+    engine: Option<PitchEngine>,
     key_detector: Option<KeyDetector>,
     detected_key: Arc<AtomicU32>,
+    latency_samples: Arc<AtomicU32>,
     quality: Quality,
     pitch_semitones: f32,
     snap_semitones: f32,
@@ -81,10 +82,11 @@ impl Default for KeyMorph {
         Self {
             params: Arc::new(KeyMorphParams::default()),
             sample_rate: 48_000.0,
-            shifter: None,
+            engine: None,
             key_detector: None,
             detected_key: Arc::new(AtomicU32::new(pack_key(0, KeyMode::Minor, 0.0))),
-            quality: Quality::Balanced,
+            latency_samples: Arc::new(AtomicU32::new(0)),
+            quality: Quality::High,
             pitch_semitones: 0.0,
             snap_semitones: 0.0,
             active_mix: 1.0,
@@ -129,6 +131,7 @@ impl Plugin for KeyMorph {
         let params = self.params.clone();
         let egui_state = self.params.editor_state.clone();
         let detected = self.detected_key.clone();
+        let latency = self.latency_samples.clone();
 
         create_egui_editor(
             egui_state.clone(),
@@ -157,7 +160,7 @@ impl Plugin for KeyMorph {
                                     ui.label(
                                         egui::RichText::new(format!(
                                             "Latency: {} samples",
-                                            REPORTED_LATENCY_SAMPLES
+                                            latency.load(Ordering::Relaxed)
                                         ))
                                         .small()
                                         .color(muted()),
@@ -235,12 +238,14 @@ impl Plugin for KeyMorph {
             .unwrap_or(2);
 
         self.sample_rate = buffer_config.sample_rate;
-
-        let mut shifter = PitchShifter::new(channels, buffer_config.sample_rate);
         self.quality = self.params.quality.value();
-        shifter.set_quality(self.quality);
-        context.set_latency_samples(shifter.latency_samples());
-        self.shifter = Some(shifter);
+
+        let mut engine = PitchEngine::new(buffer_config.sample_rate, channels);
+        engine.set_quality(self.quality);
+        let latency = engine.latency_samples();
+        self.latency_samples.store(latency, Ordering::Relaxed);
+        context.set_latency_samples(latency);
+        self.engine = Some(engine);
         self.key_detector = Some(KeyDetector::new(buffer_config.sample_rate));
         self.detected_key
             .store(pack_key(0, KeyMode::Minor, 0.0), Ordering::Relaxed);
@@ -249,8 +254,8 @@ impl Plugin for KeyMorph {
     }
 
     fn reset(&mut self) {
-        if let Some(shifter) = &mut self.shifter {
-            shifter.reset();
+        if let Some(engine) = &mut self.engine {
+            engine.reset();
         }
         if let Some(detector) = &mut self.key_detector {
             detector.reset();
@@ -276,45 +281,31 @@ impl Plugin for KeyMorph {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let Some(shifter) = self.shifter.as_mut() else {
+        let Some(engine) = self.engine.as_mut() else {
             return ProcessStatus::Normal;
         };
 
         let quality = self.params.quality.value();
         if quality != self.quality {
-            shifter.set_quality(quality);
+            engine.set_quality(quality);
             self.quality = quality;
         }
 
-        let source_auto = self.params.source_auto.value();
-        let source_root_manual = self.params.source_root.value().clamp(0, 11) as u8;
-        let target_root = self.params.target_root.value().clamp(0, 11) as u8;
-        let scale = self.params.scale.value();
-        let retune_ms = self.params.retune_speed.value();
-        let retune_coefficient = if retune_ms <= 0.0 {
-            1.0
-        } else {
-            let samples = (retune_ms * 0.001 * self.sample_rate).max(1.0);
-            1.0 - (-1.0 / samples).exp()
-        };
-
-        let estimate = self
-            .key_detector
-            .as_ref()
-            .map(|detector| detector.estimate())
-            .unwrap_or_default();
-        let source_root = if source_auto && estimate.confidence > 0.5 {
-            estimate.root
-        } else {
-            source_root_manual
-        };
-        let key_offset = shortest_key_offset(source_root, target_root) as f32;
+        let channels = buffer.channels();
+        let total_frames = buffer.samples();
+        if channels == 0 || total_frames == 0 || channels != engine.channel_count() {
+            return ProcessStatus::Normal;
+        }
 
         let lfo_shape = self.params.lfo_shape.value();
         let lfo_rate = self.params.lfo_rate.value();
         let lfo_phase_offset = self.params.lfo_phase.value() / 360.0;
         let mod_target = self.params.mod_target.value();
         let limiter = self.params.limiter.value();
+        let source_auto = self.params.source_auto.value();
+        let source_root_manual = self.params.source_root.value().clamp(0, 11) as u8;
+        let target_root = self.params.target_root.value().clamp(0, 11) as u8;
+        let scale = self.params.scale.value();
 
         let bypass_target = if self.params.bypass.value() { 0.0 } else { 1.0 };
         let bypass_step = 1.0 / (BYPASS_RAMP_SECONDS * self.sample_rate).max(1.0);
@@ -324,39 +315,57 @@ impl Plugin for KeyMorph {
         } else {
             1.0 - (-1.0 / glide_samples).exp()
         };
-        let transpose = self.params.transpose.value() as f32;
+        let retune_ms = self.params.retune_speed.value();
+        let retune_coefficient = if retune_ms <= 0.0 {
+            1.0
+        } else {
+            let samples = (retune_ms * 0.001 * self.sample_rate).max(1.0);
+            1.0 - (-1.0 / samples).exp()
+        };
 
-        for mut channel_samples in buffer.iter_samples() {
-            let mono = {
-                let mut sum = 0.0;
-                for sample in channel_samples.iter_mut() {
-                    sum += *sample;
-                }
-                sum / channel_samples.len() as f32
-            };
-            if let Some(detector) = &mut self.key_detector
-                && detector.process_sample(mono)
+        let mut frame_position = 0;
+        while frame_position < total_frames {
+            let count = (total_frames - frame_position).min(engine.chunk_frames());
+
             {
-                let updated = detector.estimate();
-                self.detected_key.store(
-                    pack_key(updated.root, updated.mode, updated.confidence),
-                    Ordering::Relaxed,
-                );
+                let channel_slices = buffer.as_slice();
+                for frame in 0..count {
+                    let mut mono = 0.0;
+                    for channel_slice in channel_slices.iter().take(channels) {
+                        mono += channel_slice[frame_position + frame];
+                    }
+                    mono /= channels as f32;
+
+                    if let Some(detector) = &mut self.key_detector
+                        && detector.process_sample(mono)
+                    {
+                        let updated = detector.estimate();
+                        self.detected_key.store(
+                            pack_key(updated.root, updated.mode, updated.confidence),
+                            Ordering::Relaxed,
+                        );
+                    }
+                }
             }
 
-            let snap_amount = self.params.snap_amount.smoothed.next() * 0.01;
-            let fine = cents_to_semitones(self.params.fine.smoothed.next());
+            let (f0, mono_confidence) = self
+                .key_detector
+                .as_ref()
+                .map(|detector| (detector.f0_hz(), detector.monophonicity()))
+                .unwrap_or((0.0, 0.0));
+            let estimate = self
+                .key_detector
+                .as_ref()
+                .map(|detector| detector.estimate())
+                .unwrap_or_default();
+            let source_root = if source_auto && estimate.confidence > 0.5 {
+                estimate.root
+            } else {
+                source_root_manual
+            };
+            let key_offset = shortest_key_offset(source_root, target_root) as f32;
 
-            let lfo_depth = self.params.lfo_depth.smoothed.next();
-            self.lfo_phase += lfo_rate / self.sample_rate;
-            if self.lfo_phase >= 1.0 {
-                self.lfo_phase -= 1.0;
-                self.random_state = self
-                    .random_state
-                    .wrapping_mul(1_664_525)
-                    .wrapping_add(1_013_904_223);
-                self.random_value = ((self.random_state >> 8) as f32 / 16_777_216.0) * 2.0 - 1.0;
-            }
+            let lfo_depth = self.params.lfo_depth.value();
             let phase = (self.lfo_phase + lfo_phase_offset).fract();
             let wave = match lfo_shape {
                 LfoShape::Sine => (TAU * phase).sin(),
@@ -391,7 +400,19 @@ impl Plugin for KeyMorph {
                 0.0
             };
 
-            let (f0, mono_confidence) = shifter.analysis();
+            self.lfo_phase += lfo_rate * count as f32 / self.sample_rate;
+            if self.lfo_phase >= 1.0 {
+                self.lfo_phase -= self.lfo_phase.floor();
+                self.random_state = self
+                    .random_state
+                    .wrapping_mul(1_664_525)
+                    .wrapping_add(1_013_904_223);
+                self.random_value = ((self.random_state >> 8) as f32 / 16_777_216.0) * 2.0 - 1.0;
+            }
+
+            let transpose = self.params.transpose.value() as f32;
+            let fine = cents_to_semitones(self.params.fine.value());
+            let snap_amount = self.params.snap_amount.value() * 0.01;
             let snap_target = if snap_amount > 0.0 && mono_confidence > 0.5 && f0 > 0.0 {
                 let note = 69.0 + 12.0 * (f0 / 440.0).log2();
                 nearest_scale_delta(note + transpose + fine + key_offset, target_root, scale)
@@ -399,48 +420,74 @@ impl Plugin for KeyMorph {
             } else {
                 0.0
             };
-            self.snap_semitones += (snap_target - self.snap_semitones) * retune_coefficient;
+            let retune_step = 1.0 - (1.0 - retune_coefficient).powi(count as i32);
+            self.snap_semitones += (snap_target - self.snap_semitones) * retune_step;
 
             let pitch_target = (transpose + fine + key_offset + self.snap_semitones + lfo_pitch)
                 .clamp(-24.0, 24.0);
-            self.pitch_semitones += (pitch_target - self.pitch_semitones) * glide_coefficient;
-            let ratio = (self.pitch_semitones / 12.0).exp2();
+            let glide_step = 1.0 - (1.0 - glide_coefficient).powi(count as i32);
+            self.pitch_semitones += (pitch_target - self.pitch_semitones) * glide_step;
+            let transpose_semitones = self.pitch_semitones;
 
-            let formant_shift = self.params.formant_shift.smoothed.next();
-            let formant_preserve = self.params.formant_preserve.smoothed.next() * 0.01;
+            let formant_shift = self.params.formant_shift.value();
+            let preserve = self.params.formant_preserve.value() * 0.01;
             let formant_ratio = (formant_shift / 12.0).exp2();
-            let envelope_warp = formant_ratio * ratio.powf(-formant_preserve);
-
-            let input_gain = self.params.input_gain.smoothed.next();
-            let output_gain = self.params.output_gain.smoothed.next();
-            let mix = (self.params.mix.smoothed.next() * 0.01 + lfo_mix).clamp(0.0, 1.0);
-
-            if self.active_mix < bypass_target {
-                self.active_mix = (self.active_mix + bypass_step).min(bypass_target);
+            let pitch_ratio = (transpose_semitones / 12.0).exp2();
+            let compensate = (preserve > 0.001 && (pitch_ratio - 1.0).abs() > 1.0e-4)
+                || formant_shift.abs() > 0.001;
+            let formant_multiplier = if compensate {
+                pitch_ratio.powf(preserve) / formant_ratio
             } else {
-                self.active_mix = (self.active_mix - bypass_step).max(bypass_target);
-            }
+                1.0
+            };
 
-            let angle = mix * self.active_mix * FRAC_PI_2;
-            let wet_gain = angle.sin();
-            let dry_gain = angle.cos();
-
-            for (channel, sample) in channel_samples.iter_mut().enumerate() {
-                let input = *sample * input_gain;
-
-                let mut output = if channel < shifter.channel_count() {
-                    let (wet, dry) = shifter.process_sample(channel, input, ratio, envelope_warp);
-                    (wet * wet_gain + dry * dry_gain) * output_gain
-                } else {
-                    input * output_gain
-                };
-
-                if limiter {
-                    output = output.clamp(-0.966, 0.966);
+            {
+                let input = engine.input_buffer_mut();
+                let channel_slices = buffer.as_slice();
+                for frame in 0..count {
+                    let input_gain = self.params.input_gain.smoothed.next();
+                    for (channel, channel_slice) in channel_slices.iter().enumerate().take(channels)
+                    {
+                        let sample = channel_slice[frame_position + frame] * input_gain;
+                        input[frame * channels + channel] = sample;
+                    }
                 }
-
-                *sample = output;
             }
+
+            engine.process_chunk(count, transpose_semitones, formant_multiplier, compensate);
+
+            {
+                let channel_slices = buffer.as_slice();
+                for frame in 0..count {
+                    let mix = (self.params.mix.smoothed.next() * 0.01 + lfo_mix).clamp(0.0, 1.0);
+                    let output_gain = self.params.output_gain.smoothed.next();
+
+                    if self.active_mix < bypass_target {
+                        self.active_mix = (self.active_mix + bypass_step).min(bypass_target);
+                    } else {
+                        self.active_mix = (self.active_mix - bypass_step).max(bypass_target);
+                    }
+
+                    let angle = mix * self.active_mix * FRAC_PI_2;
+                    let wet_gain = angle.sin();
+                    let dry_gain = angle.cos();
+
+                    for (channel, channel_slice) in
+                        channel_slices.iter_mut().enumerate().take(channels)
+                    {
+                        let index = frame * channels + channel;
+                        let wet = engine.wet()[index];
+                        let dry = engine.dry()[index];
+                        let mut output = (wet * wet_gain + dry * dry_gain) * output_gain;
+                        if limiter {
+                            output = output.clamp(-0.966, 0.966);
+                        }
+                        channel_slice[frame_position + frame] = output;
+                    }
+                }
+            }
+
+            frame_position += count;
         }
 
         ProcessStatus::Normal

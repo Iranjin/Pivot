@@ -32,11 +32,14 @@ pub struct KeyDetector {
     fft_input: Vec<f32>,
     spectrum: Vec<Complex32>,
     scratch: Vec<Complex32>,
+    magnitude: Vec<f32>,
     window: Vec<f32>,
     write: usize,
     count: u64,
     chroma: [f32; 12],
     tuning_cents: f32,
+    f0_hz: f32,
+    mono_confidence: f32,
     estimate: KeyEstimate,
 }
 
@@ -57,11 +60,14 @@ impl KeyDetector {
             fft_input: vec![0.0; FFT_SIZE],
             spectrum,
             scratch,
+            magnitude: vec![0.0; FFT_SIZE / 2 + 1],
             window,
             write: 0,
             count: 0,
             chroma: [0.0; 12],
             tuning_cents: 0.0,
+            f0_hz: 0.0,
+            mono_confidence: 0.0,
             estimate: KeyEstimate::default(),
         }
     }
@@ -73,11 +79,22 @@ impl KeyDetector {
         self.count = 0;
         self.chroma = [0.0; 12];
         self.tuning_cents = 0.0;
+        self.f0_hz = 0.0;
+        self.mono_confidence = 0.0;
+        self.magnitude.fill(0.0);
         self.estimate = KeyEstimate::default();
     }
 
     pub fn estimate(&self) -> KeyEstimate {
         self.estimate
+    }
+
+    pub fn f0_hz(&self) -> f32 {
+        self.f0_hz
+    }
+
+    pub fn monophonicity(&self) -> f32 {
+        self.mono_confidence
     }
 
     pub fn process_sample(&mut self, sample: f32) -> bool {
@@ -110,8 +127,13 @@ impl KeyDetector {
             return;
         }
 
+        for (magnitude, value) in self.magnitude.iter_mut().zip(&self.spectrum) {
+            *magnitude = value.norm();
+        }
+
         self.update_tuning();
         self.update_chroma();
+        self.update_monophonicity();
         self.update_key();
     }
 
@@ -122,7 +144,7 @@ impl KeyDetector {
         let mut peak_bin = 0;
         let mut peak_magnitude = 0.0;
         for k in 1..max_bin {
-            let magnitude = self.spectrum[k].norm();
+            let magnitude = self.magnitude[k];
             if magnitude > peak_magnitude {
                 peak_magnitude = magnitude;
                 peak_bin = k;
@@ -140,9 +162,9 @@ impl KeyDetector {
     fn refined_frequency(&self, bin: usize) -> f32 {
         let left = bin.saturating_sub(1);
         let right = (bin + 1).min(FFT_SIZE / 2);
-        let a = (self.spectrum[left].norm() + 1.0e-12).ln();
-        let b = (self.spectrum[bin].norm() + 1.0e-12).ln();
-        let c = (self.spectrum[right].norm() + 1.0e-12).ln();
+        let a = (self.magnitude[left] + 1.0e-12).ln();
+        let b = (self.magnitude[bin] + 1.0e-12).ln();
+        let c = (self.magnitude[right] + 1.0e-12).ln();
         let denominator = a - 2.0 * b + c;
         let offset = if denominator.abs() > 1.0e-9 {
             (0.5 * (a - c) / denominator).clamp(-0.5, 0.5)
@@ -164,8 +186,8 @@ impl KeyDetector {
                 continue;
             }
 
-            let magnitude = self.spectrum[k].norm();
-            if magnitude <= self.spectrum[k - 1].norm() || magnitude < self.spectrum[k + 1].norm() {
+            let magnitude = self.magnitude[k];
+            if magnitude <= self.magnitude[k - 1] || magnitude < self.magnitude[k + 1] {
                 continue;
             }
 
@@ -184,6 +206,117 @@ impl KeyDetector {
         for (smoothed, value) in self.chroma.iter_mut().zip(frame) {
             *smoothed = *smoothed * 0.95 + value * 0.05;
         }
+    }
+
+    fn update_monophonicity(&mut self) {
+        const HARMONICS: usize = 5;
+
+        let bins = self.magnitude.len();
+        if bins < 8 {
+            return;
+        }
+
+        let mut log_sum = 0.0;
+        let mut linear_sum = 0.0;
+        let mut total_energy = 0.0;
+        for k in 1..bins - 1 {
+            let magnitude = self.magnitude[k] + 1.0e-12;
+            log_sum += magnitude.ln();
+            linear_sum += magnitude;
+            total_energy += magnitude * magnitude;
+        }
+
+        let count = (bins - 2) as f32;
+        let geometric = (log_sum / count).exp();
+        let arithmetic = linear_sum / count;
+        let flatness = if arithmetic > 1.0e-12 {
+            (geometric / arithmetic).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+
+        let min_bin = ((40.0 * FFT_SIZE as f32 / self.sample_rate).round() as usize).max(1);
+        let max_bin =
+            ((800.0 * FFT_SIZE as f32 / self.sample_rate).round() as usize).min(bins / HARMONICS);
+
+        let mut best_bin = 0;
+        let mut best_score = f32::NEG_INFINITY;
+        let magnitude_threshold = self.magnitude.iter().copied().fold(0.0, f32::max) * 0.05;
+        if max_bin > min_bin {
+            for candidate in min_bin..=max_bin {
+                if self.magnitude[candidate] < magnitude_threshold {
+                    continue;
+                }
+                if self.magnitude[candidate] <= self.magnitude[candidate - 1]
+                    || self.magnitude[candidate] < self.magnitude[candidate + 1]
+                {
+                    continue;
+                }
+
+                let mut strongest: f32 = 0.0;
+                for harmonic in 1..=HARMONICS {
+                    let bin = (candidate * harmonic).min(bins - 1);
+                    strongest = strongest.max(self.magnitude[bin]);
+                }
+                if self.magnitude[candidate] < strongest * 0.25 {
+                    continue;
+                }
+
+                let mut score = 0.0;
+                for harmonic in 1..=HARMONICS {
+                    let bin = candidate * harmonic;
+                    if bin >= bins {
+                        break;
+                    }
+                    score += (self.magnitude[bin] + 1.0e-12).ln();
+                }
+                if score > best_score {
+                    best_score = score;
+                    best_bin = candidate;
+                }
+            }
+        }
+
+        let mut harmonic_energy = 0.0;
+        if best_bin > 0 {
+            for harmonic in 1..=HARMONICS {
+                let center = best_bin * harmonic;
+                if center >= bins {
+                    break;
+                }
+                let start = center.saturating_sub(1);
+                let end = (center + 1).min(bins - 1);
+                for bin in start..=end {
+                    harmonic_energy += self.magnitude[bin] * self.magnitude[bin];
+                }
+            }
+        }
+
+        let confidence = if total_energy > 1.0e-12 {
+            (harmonic_energy / total_energy).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let target = confidence * (1.0 - flatness).clamp(0.0, 1.0);
+        self.mono_confidence += (target - self.mono_confidence) * 0.1;
+
+        let refined_bin = if best_bin > 0 {
+            let left = best_bin.saturating_sub(1);
+            let right = (best_bin + 1).min(bins - 1);
+            let a = (self.magnitude[left] + 1.0e-12).ln();
+            let b = (self.magnitude[best_bin] + 1.0e-12).ln();
+            let c = (self.magnitude[right] + 1.0e-12).ln();
+            let denominator = a - 2.0 * b + c;
+            let offset = if denominator.abs() > 1.0e-9 {
+                (0.5 * (a - c) / denominator).clamp(-0.5, 0.5)
+            } else {
+                0.0
+            };
+            best_bin as f32 + offset
+        } else {
+            0.0
+        };
+        self.f0_hz = refined_bin * self.sample_rate / FFT_SIZE as f32;
     }
 
     fn update_key(&mut self) {
@@ -293,5 +426,29 @@ mod tests {
         let input = vec![0.0; 48_000];
         let estimate = detect(&input);
         assert!(estimate.confidence < 0.5);
+    }
+
+    #[test]
+    fn detects_f0_and_monophonicity() {
+        let mut input = vec![0.0; 96_000];
+        for (i, sample) in input.iter_mut().enumerate() {
+            *sample = (TAU * 220.0 * i as f32 / SAMPLE_RATE).sin();
+        }
+
+        let mut detector = KeyDetector::new(SAMPLE_RATE);
+        for &sample in &input {
+            detector.process_sample(sample);
+        }
+
+        assert!(
+            (detector.f0_hz() - 220.0).abs() < 5.0,
+            "f0 {}",
+            detector.f0_hz()
+        );
+        assert!(
+            detector.monophonicity() > 0.5,
+            "mono {}",
+            detector.monophonicity()
+        );
     }
 }
