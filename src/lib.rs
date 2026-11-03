@@ -375,13 +375,15 @@ impl ClapPlugin for Pivot {
         ClapFeature::AudioEffect,
         ClapFeature::Stereo,
         ClapFeature::Mono,
+        ClapFeature::PitchShifter,
         ClapFeature::Utility,
     ];
 }
 
 impl Vst3Plugin for Pivot {
     const VST3_CLASS_ID: [u8; 16] = *b"PivotPivotPivot0";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Fx];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
 }
 
 nih_export_clap!(Pivot);
