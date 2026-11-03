@@ -1,22 +1,23 @@
-use nih_plug::prelude::*;
+use std::f32::consts::FRAC_PI_2;
 use std::sync::Arc;
+
+use nih_plug::prelude::*;
+
+use crate::dsp::PitchShifter;
+use crate::params::{KeyMorphParams, Quality};
+
+mod dsp;
+mod params;
 
 const BYPASS_RAMP_SECONDS: f32 = 0.02;
 
 struct KeyMorph {
     params: Arc<KeyMorphParams>,
     sample_rate: f32,
+    shifter: Option<PitchShifter>,
+    quality: Quality,
+    pitch_semitones: f32,
     active_mix: f32,
-}
-
-#[derive(Params)]
-struct KeyMorphParams {
-    #[id = "bypass"]
-    pub bypass: BoolParam,
-    #[id = "input_gain"]
-    pub input_gain: FloatParam,
-    #[id = "output_gain"]
-    pub output_gain: FloatParam,
 }
 
 impl Default for KeyMorph {
@@ -24,35 +25,12 @@ impl Default for KeyMorph {
         Self {
             params: Arc::new(KeyMorphParams::default()),
             sample_rate: 48_000.0,
+            shifter: None,
+            quality: Quality::Balanced,
+            pitch_semitones: 0.0,
             active_mix: 1.0,
         }
     }
-}
-
-impl Default for KeyMorphParams {
-    fn default() -> Self {
-        Self {
-            bypass: BoolParam::new("Bypass", false),
-            input_gain: gain_param("Input"),
-            output_gain: gain_param("Output"),
-        }
-    }
-}
-
-fn gain_param(name: &'static str) -> FloatParam {
-    FloatParam::new(
-        name,
-        util::db_to_gain(0.0),
-        FloatRange::Skewed {
-            min: util::db_to_gain(-24.0),
-            max: util::db_to_gain(24.0),
-            factor: FloatRange::gain_skew_factor(-24.0, 24.0),
-        },
-    )
-    .with_smoother(SmoothingStyle::Logarithmic(20.0))
-    .with_unit(" dB")
-    .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
-    .with_string_to_value(formatters::s2v_f32_gain_to_db())
 }
 
 impl Plugin for KeyMorph {
@@ -87,40 +65,90 @@ impl Plugin for KeyMorph {
 
     fn initialize(
         &mut self,
-        _audio_io_layout: &AudioIOLayout,
+        audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
+        let channels = audio_io_layout
+            .main_output_channels
+            .map(|channels| channels.get() as usize)
+            .unwrap_or(2);
+
         self.sample_rate = buffer_config.sample_rate;
+
+        let mut shifter = PitchShifter::new(channels);
+        self.quality = self.params.quality.value();
+        shifter.set_quality(self.quality);
+        context.set_latency_samples(shifter.latency_samples());
+        self.shifter = Some(shifter);
+
         true
     }
 
     fn reset(&mut self) {
+        if let Some(shifter) = &mut self.shifter {
+            shifter.reset();
+        }
+
         self.active_mix = if self.params.bypass.value() { 0.0 } else { 1.0 };
+        self.pitch_semitones = self.params.transpose.value() as f32 + self.params.fine.value();
     }
 
     fn process(
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let target = if self.params.bypass.value() { 0.0 } else { 1.0 };
-        let step = 1.0 / (BYPASS_RAMP_SECONDS * self.sample_rate).max(1.0);
+        let Some(shifter) = self.shifter.as_mut() else {
+            return ProcessStatus::Normal;
+        };
 
-        for channel_samples in buffer.iter_samples() {
-            let gain =
-                self.params.input_gain.smoothed.next() * self.params.output_gain.smoothed.next();
+        let quality = self.params.quality.value();
+        if quality != self.quality {
+            shifter.set_quality(quality);
+            self.quality = quality;
+            context.set_latency_samples(shifter.latency_samples());
+        }
 
-            if self.active_mix < target {
-                self.active_mix = (self.active_mix + step).min(target);
+        let bypass_target = if self.params.bypass.value() { 0.0 } else { 1.0 };
+        let bypass_step = 1.0 / (BYPASS_RAMP_SECONDS * self.sample_rate).max(1.0);
+        let glide_samples = (self.params.glide.value() * 0.001 * self.sample_rate).max(0.0);
+        let glide_coefficient = if glide_samples <= 1.0 {
+            1.0
+        } else {
+            1.0 - (-1.0 / glide_samples).exp()
+        };
+        let transpose = self.params.transpose.value() as f32;
+
+        for mut channel_samples in buffer.iter_samples() {
+            let pitch_target = transpose + self.params.fine.smoothed.next();
+            self.pitch_semitones += (pitch_target - self.pitch_semitones) * glide_coefficient;
+            let ratio = (self.pitch_semitones / 12.0).exp2();
+
+            let input_gain = self.params.input_gain.smoothed.next();
+            let output_gain = self.params.output_gain.smoothed.next();
+            let mix = self.params.mix.smoothed.next() * 0.01;
+
+            if self.active_mix < bypass_target {
+                self.active_mix = (self.active_mix + bypass_step).min(bypass_target);
             } else {
-                self.active_mix = (self.active_mix - step).max(target);
+                self.active_mix = (self.active_mix - bypass_step).max(bypass_target);
             }
 
-            for sample in channel_samples {
-                let dry = *sample;
-                *sample = dry * (1.0 - self.active_mix) + dry * gain * self.active_mix;
+            let angle = mix * self.active_mix * FRAC_PI_2;
+            let wet_gain = angle.sin();
+            let dry_gain = angle.cos();
+
+            for (channel, sample) in channel_samples.iter_mut().enumerate() {
+                let input = *sample * input_gain;
+
+                *sample = if channel < shifter.channel_count() {
+                    let (wet, dry) = shifter.process_sample(channel, input, ratio);
+                    (wet * wet_gain + dry * dry_gain) * output_gain
+                } else {
+                    input * output_gain
+                };
             }
         }
 
