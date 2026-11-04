@@ -32,7 +32,11 @@ host's generic parameter list and automation.
 
 ## Install
 
-Unzip the release archive and copy the bundle into a CLAP directory:
+Unzip the release archive and run `install.command` (right-click → Open the
+first time). It removes the quarantine flag and copies the bundle to
+`~/Library/Audio/Plug-Ins/CLAP`.
+
+Manual install:
 
 ```bash
 mkdir -p ~/Library/Audio/Plug-Ins/CLAP
@@ -51,7 +55,9 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/Pivot.clap
 
 FL Studio 2024.1 or later is required for CLAP support.
 
-## Build
+## Build from source
+
+Requires Rust stable and the Xcode command line tools.
 
 ```bash
 cargo build
@@ -80,6 +86,13 @@ certificate and notarization.
 - CLAP: passes 34 of 44 clap-validator tests with 0 failures and 10 skipped.
   The vendored nih-plug wrapper fixes CLAP state loading and malformed-state
   handling; see `SPEC.md` section 12.4.
+
+## Source
+
+Pivot is open source under the MIT License.
+
+- GitHub: <https://github.com/Iranjin/Pivot>
+- Issues and pull requests are welcome.
 
 ## Licenses
 
