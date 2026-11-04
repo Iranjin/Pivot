@@ -3,10 +3,11 @@ use nih_plug_egui::egui::{
 };
 
 #[derive(Default)]
-pub struct PitchKnobState {
+pub struct PivotUiState {
     editing: bool,
     text: String,
     focus_pending: bool,
+    license_open: bool,
 }
 
 const ACCENT: Color32 = Color32::from_rgb(96, 206, 245);
@@ -17,7 +18,7 @@ const HUB: Color32 = Color32::from_rgb(13, 15, 20);
 const TEXT: Color32 = Color32::from_rgb(235, 238, 245);
 const MUTED: Color32 = Color32::from_rgb(140, 146, 160);
 
-pub fn pitch_knob(ui: &mut Ui, value: &mut f32, state: &mut PitchKnobState) -> Response {
+pub fn pitch_knob(ui: &mut Ui, value: &mut f32, state: &mut PivotUiState) -> Response {
     let size = ui.available_width().clamp(160.0, 380.0);
     let (rect, mut response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let center = rect.center();
@@ -200,6 +201,75 @@ fn parse_pitch(text: &str) -> Option<f32> {
     value
         .is_finite()
         .then(|| (value.clamp(-24.0, 24.0) * 100.0).round() / 100.0)
+}
+
+pub fn license_link(ui: &mut Ui, state: &mut PivotUiState) {
+    ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
+        let response = ui.add(
+            egui::Button::new(egui::RichText::new("Licenses").small().color(MUTED)).frame(false),
+        );
+        if response.clicked() {
+            state.license_open = true;
+        }
+    });
+}
+
+pub fn license_window(ctx: &egui::Context, state: &mut PivotUiState) {
+    if !state.license_open {
+        return;
+    }
+
+    let mut open = state.license_open;
+    egui::Window::new("Licenses")
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(true)
+        .default_size(Vec2::new(420.0, 440.0))
+        .min_width(320.0)
+        .show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new("Pivot").strong().size(16.0));
+                    ui.add_space(4.0);
+                    license_body(ui, crate::licenses::PIVOT_LICENSE);
+                    ui.add_space(12.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Third-party notices")
+                            .strong()
+                            .size(16.0),
+                    );
+                    ui.add_space(4.0);
+                    license_body(ui, crate::licenses::THIRD_PARTY_NOTICES);
+
+                    for (title, text) in crate::licenses::ADDITIONAL_LICENSES {
+                        ui.add_space(12.0);
+                        ui.separator();
+                        ui.add_space(8.0);
+                        ui.label(egui::RichText::new(*title).strong().size(16.0));
+                        ui.add_space(4.0);
+                        license_body(ui, text);
+                    }
+                });
+        });
+    state.license_open = open;
+}
+
+fn license_body(ui: &mut Ui, text: &str) {
+    for line in text.lines() {
+        if let Some(heading) = line.strip_prefix("## ") {
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(heading).strong());
+        } else if let Some(heading) = line.strip_prefix("# ") {
+            ui.label(egui::RichText::new(heading).strong().size(16.0));
+        } else if line.is_empty() {
+            ui.add_space(4.0);
+        } else {
+            ui.label(egui::RichText::new(line).monospace().size(11.0));
+        }
+    }
 }
 
 #[cfg(test)]

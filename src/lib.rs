@@ -6,9 +6,10 @@ use nih_plug_egui::{create_egui_editor, egui};
 
 use crate::dsp::{PitchAnalyzer, PitchEngine};
 use crate::params::{LfoShape, ModTarget, PivotParams, Quality, Scale};
-use crate::ui::{PitchKnobState, pitch_knob};
+use crate::ui::{PivotUiState, license_link, license_window, pitch_knob};
 
 mod dsp;
+mod licenses;
 mod params;
 mod ui;
 
@@ -81,7 +82,7 @@ impl Plugin for Pivot {
 
         create_egui_editor(
             egui_state.clone(),
-            PitchKnobState::default(),
+            PivotUiState::default(),
             |ctx, _state| {
                 let mut style = (*ctx.style()).clone();
                 style.visuals = egui::Visuals::dark();
@@ -98,8 +99,10 @@ impl Plugin for Pivot {
                             ui.heading(egui::RichText::new("Pivot").size(20.0));
                             ui.add_space(6.0);
                             pitch_panel(ui, &params, setter, state);
+                            license_link(ui, state);
                         });
                 });
+                license_window(ctx, state);
             },
         )
     }
@@ -355,7 +358,7 @@ fn pitch_panel(
     ui: &mut egui::Ui,
     params: &PivotParams,
     setter: &ParamSetter,
-    state: &mut PitchKnobState,
+    state: &mut PivotUiState,
 ) {
     ui.vertical_centered(|ui| {
         ui.label(egui::RichText::new("PITCH").small().color(muted()));
@@ -385,14 +388,7 @@ impl ClapPlugin for Pivot {
     ];
 }
 
-impl Vst3Plugin for Pivot {
-    const VST3_CLASS_ID: [u8; 16] = *b"PivotPivotPivot0";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::PitchShift];
-}
-
 nih_export_clap!(Pivot);
-nih_export_vst3!(Pivot);
 
 fn shortest_key_offset(source: u8, target: u8) -> i32 {
     let difference = (target as i32 - source as i32).rem_euclid(12);

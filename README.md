@@ -12,7 +12,8 @@ Real-time pitch and key shifting audio effect for macOS.
 - Scale snap for monophonic sources
 - LFO modulation and a safety limiter
 - Single-knob custom UI; all other parameters are exposed to the host
-- VST3 and CLAP, universal binary (arm64 + x86_64)
+- In-editor license viewer; no license files are installed with the plugin
+- CLAP, universal binary (arm64 + x86_64)
 
 The plugin reports a fixed latency of 6720 samples (140 ms at 48 kHz).
 
@@ -29,6 +30,15 @@ steps). The host automates it as a normalized 0.0–1.0 value: 0.0 is −24 st,
 0.5 is 0 st, and 1.0 is +24 st. All other parameters are available through the
 host's generic parameter list and automation.
 
+## Install
+
+```bash
+sudo mkdir -p /Library/Audio/Plug-Ins/CLAP
+sudo cp -R target/bundled/Pivot.clap /Library/Audio/Plug-Ins/CLAP/
+```
+
+FL Studio 2024.1 or later is required for CLAP support.
+
 ## Build
 
 ```bash
@@ -38,14 +48,21 @@ cargo xtask bundle pivot --release
 cargo xtask bundle-universal pivot --release
 ```
 
-Bundles are written to `target/bundled/`.
+Bundles are written to `target/bundled/`. The release profile uses
+`strip = "none"` because the current macOS linker produces a malformed symbol
+string pool with the default debuginfo stripping.
 
 ## Validation
 
-- VST3: passes pluginval at strictness level 10, including editor and parameter
-  tests.
+- `cargo test`: 8 tests pass.
 - CLAP: passes 30 of 44 clap-validator tests. The remaining failures are upstream
   nih-plug issues with state loading; see `SPEC.md` section 12.4.
+
+## Licenses
+
+Pivot is released under the MIT License. The plugin embeds its own license and
+the third-party notices in the editor. Click **Licenses** at the bottom of the
+window to read them. No separate license file is installed with the CLAP bundle.
 
 ## Documentation
 

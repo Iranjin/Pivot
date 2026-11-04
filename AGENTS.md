@@ -21,7 +21,7 @@ These instructions apply to the entire repository.
 Pivot is a real-time audio pitch/key-shift plugin.
 
 - Language: Rust (stable, 2024 edition)
-- Plugin framework: nih-plug (VST3 + CLAP)
+- Plugin framework: nih-plug (CLAP)
 - UI: egui via `nih_plug_egui` / `egui_glow`
 - Target: macOS 12+, Universal Binary
 - `SPEC.md` is the source of truth for behavior. Update it when behavior changes.

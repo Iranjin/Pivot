@@ -291,7 +291,7 @@ fn parse_float(text: &str) -> Option<f32> {
 }
 
 fn pitch_formatter(value: f32) -> String {
-    format!("{value:+.2} st")
+    format!("{value:+.2}")
 }
 
 fn gain_param(name: &'static str) -> FloatParam {

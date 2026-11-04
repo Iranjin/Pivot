@@ -2,7 +2,7 @@
 
 - Version: 0.1 (draft)
 - Last updated: 2026-11-03
-- Target: macOS audio pitch-shift VST3 / CLAP plugin
+- Target: macOS audio pitch-shift CLAP plugin
 - Implementation language: Rust (nih-plug + egui)
 
 ---
@@ -52,7 +52,7 @@ As the name suggests, morphing the key is the core purpose.
 - LFO modulation
 - Dry/wet, input/output gain, safety limiter
 - Host state persistence
-- VST3 / CLAP bundles, macOS 12+ (Universal Binary)
+- CLAP bundle, macOS 12+ (Universal Binary)
 
 ### 2.2 Out of scope for v1.0 (future candidates)
 
@@ -165,7 +165,7 @@ handles monophonic, polyphonic, and mixed material without a mode switch.
 
 ### 4.3 State
 
-- Persist plugin state through the host (VST3 state / CLAP state)
+- Persist plugin state through the host (CLAP state)
 - The custom UI exposes only the pitch knob; all other parameters are exposed
   through the host's generic parameter list
 - No plugin-internal preset browser or A/B snapshots
@@ -199,6 +199,10 @@ Knob interaction:
 - Support HiDPI and remain intact at 150% / 200% scaling
 - The knob shows the value inside and supports drag, Shift-drag, scroll, and
   double-click text entry
+- A small Licenses link opens an in-editor viewer containing the MIT license
+  and third-party notices
+- License texts are embedded in the binary; no separate license file is
+  installed with the plugin bundle
 
 ---
 
@@ -210,8 +214,8 @@ Knob interaction:
 |---|---|
 | OS | macOS 12 Monterey or later |
 | CPU | Apple Silicon (arm64) / Intel (x86_64) Universal Binary |
-| Plugin formats | VST3 3.7.x, CLAP 1.x |
-| DAW validation | Logic Pro, Ableton Live, Bitwig, Reaper, Cubase (VST3) |
+| Plugin formats | CLAP 1.x |
+| DAW validation | FL Studio 2024.1+, Bitwig, Reaper, Studio One (CLAP) |
 | Sample rates | 44.1 / 48 / 88.2 / 96 / 176.4 / 192 kHz |
 | Channels | Stereo in → stereo out (mono in/out also accepted) |
 | Buffer size | 32–2048 samples |
@@ -240,11 +244,14 @@ Knob interaction:
 
 ### 5.4 Licensing / distribution
 
-- Plugin license: undecided (MIT or proprietary)
-- Dependencies must be MIT / ISC / Apache-2.0 only
+- Plugin license: MIT
+- License texts are embedded in the editor; release bundles contain no separate
+  license file
+- Dependencies must use permissive licenses compatible with MIT distribution
+  (MIT, ISC, Apache-2.0, BSD, OFL, UFL, Unicode)
 - Do not use GPL-licensed code (for example, Rubber Band)
 - Code-sign and notarize releases
-- Distribution format: `.pkg` or `.dmg` (bundling VST3 / CLAP)
+- Distribution format: `.pkg` or `.dmg` (bundling CLAP)
 
 ---
 
@@ -368,7 +375,6 @@ Signalsmith Stretch (pitch + formant)
 | Plugin name | Pivot |
 | Vendor | Iranjin |
 | CLAP ID | `com.iranjin.pivot` |
-| VST3 UID | Generated from the vendor code (fixed) |
 | Version | 0.1.0 (development), 1.0.0 (release) |
 
 ### 8.2 Buses / events
@@ -378,7 +384,7 @@ Signalsmith Stretch (pitch + formant)
 - Sidechain: none
 - MIDI input: yes (pitch bend, CC, aftertouch)
 - MIDI output: none
-- Tempo information: used for LFO sync (CLAP / VST3 transport)
+- Tempo information: used for LFO sync (CLAP transport)
 
 ### 8.3 State
 
@@ -405,13 +411,13 @@ Use Rust + nih-plug.
 | Item | Value |
 |---|---|
 | Language | Rust (stable, 2024 edition) |
-| Plugin framework | nih-plug (VST3 / CLAP from one codebase) |
+| Plugin framework | nih-plug (CLAP) |
 | UI | egui (`nih_plug_egui` / `egui_glow` backend) |
 | Licensing | nih-plug: ISC / egui: MIT or Apache-2.0 |
 
 Reasons:
 
-1. Produce VST3 and CLAP from one codebase
+1. Produce a CLAP plugin with a small, auditable dependency graph
 2. Enforce no allocation on the audio thread by design
 3. egui offers enough custom drawing freedom to meet the UI requirements
 4. Compose the stack from MIT / ISC / Apache-2.0 only and avoid GPL
@@ -514,7 +520,6 @@ cargo build
 
 # Build bundles
 cargo xtask bundle pivot --release
-# → target/bundled/Pivot.vst3
 # → target/bundled/Pivot.clap
 
 # Universal release bundles (arm64 + x86_64)
@@ -528,7 +533,7 @@ cargo xtask bundle-universal pivot --release
 3. Code-sign (Developer ID Application)
 4. Notarize with `notarytool`
 5. Create a `.dmg` and attach the ticket with `stapler`
-6. Validate with pluginval (VST3) and clap-validator
+6. Validate with clap-validator
 
 ### 11.3 CI
 
@@ -566,21 +571,20 @@ cargo xtask bundle-universal pivot --release
 
 ### 12.3 Validation tools
 
-- pluginval (level 10)
 - clap-validator
-- Manual DAW checks (Logic / Live / Bitwig / Reaper)
+- Manual DAW checks (FL Studio / Bitwig / Reaper / Studio One)
 
 ### 12.4 Known validation exceptions
 
 - CLAP state load: nih-plug's CLAP wrapper does not request a parameter value rescan
-  after loading state through the host state extension. VST3 is unaffected. This is
-  an upstream nih-plug issue.
+  after loading state through the host state extension. This is an upstream
+  nih-plug issue.
 - CLAP malformed state: nih-plug's CLAP wrapper trusts the length prefix in the
   state stream, so malformed state can trigger a large allocation. Hosts write
   valid state, so this only affects fuzzing and corrupted files. This is an
   upstream nih-plug issue.
-- VST3 passes pluginval at strictness level 10, including editor and parameter
-  tests.
+- clap-validator passes 30 of 44 tests; the remaining failures are the upstream
+  state issues above.
 
 ### 12.5 Acceptance criteria (v1.0)
 
@@ -599,7 +603,7 @@ cargo xtask bundle-universal pivot --release
 
 | Phase | Content | Estimate |
 |---|---|---|
-| M0 | Project skeleton, VST3 / CLAP output, bypass + gain | 1 week |
+| M0 | Project skeleton, CLAP output, bypass + gain | 1 week |
 | M1 | Signalsmith Stretch integration, parameters, latency reporting | 2–3 weeks |
 | M2 | Formant mapping, pitch analysis, scale snap | 2–3 weeks |
 | M3 | Key UI, scale snap, LFO, limiter | 2 weeks |
@@ -618,7 +622,7 @@ cargo xtask bundle-universal pivot --release
 | Latency vs. quality trade-off | Medium | Fixed 140 ms reported latency at 48 kHz, host compensation, no zero-latency mode |
 | Build complexity from Signalsmith FFI | Low | Pinned crate, prebuilt buffers, CI build check |
 | Notarization / signing operational burden | Low | Automate in CI, manage certificates in Secrets |
-| CLAP state-load rescan (upstream nih-plug) | Medium | VST3 validated; document and track an upstream fix |
+| CLAP state-load rescan (upstream nih-plug) | Medium | Document and track an upstream fix |
 | CLAP malformed-state allocation (upstream nih-plug) | Low | Document; valid host state is unaffected |
 | Out-of-tune feel from scale snap | Medium | Separate snap amount from retune speed; make both preset-adjustable |
 
@@ -626,8 +630,8 @@ cargo xtask bundle-universal pivot --release
 
 ## 15. Open Questions
 
-- [ ] License (MIT / proprietary)
-- [ ] Vendor name and VST3 UID
+- [x] License (MIT)
+- [ ] Vendor name and CLAP ID
 - [ ] Price / distribution channel (direct / App Store / free)
 - [ ] Include AU support in v1.1?
 - [ ] Include harmony generation in v1.0?
@@ -642,7 +646,6 @@ cargo xtask bundle-universal pivot --release
 
 - nih-plug: https://github.com/robbert-vdh/nih-plug
 - CLAP: https://github.com/free-audio/clap
-- VST3 SDK: https://github.com/steinbergmedia/vst3sdk
 - Signalsmith Stretch: https://github.com/Signalsmith-Audio/signalsmith-stretch
 - Signalsmith Linear: https://github.com/Signalsmith-Audio/linear
 - Harmonic product spectrum: Schroeder (1968), *Period histogram and product spectrum: New methods for fundamental-frequency measurement*
