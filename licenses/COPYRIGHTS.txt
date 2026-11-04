@@ -255,13 +255,13 @@ objc2 0.5.3 — MIT
   Authors: Steven Sheldon, Mads Marquart <mads@marquart.dk>
 
 objc2-app-kit 0.2.2 — MIT
-  (no copyright notice in the package)
+  Repository: https://github.com/madsmtm/objc2
 
 objc2-encode 4.1.0 — MIT
   Authors: Mads Marquart <mads@marquart.dk>
 
 objc2-foundation 0.2.2 — MIT
-  (no copyright notice in the package)
+  Repository: https://github.com/madsmtm/objc2
 
 object 0.40.0 — Apache-2.0 OR MIT
   Copyright (c) 2015 The Gimli Developers
@@ -323,7 +323,7 @@ serde_derive 1.0.229 — MIT OR Apache-2.0
   Authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
 
 serde_json 1.0.154 — MIT OR Apache-2.0
-  (no copyright notice in the package)
+  Repository: https://github.com/serde-rs/json
 
 signalsmith-stretch 0.1.3 — MIT
   Copyright 2024 Colin Marc <hi@colinmarc.com>
@@ -373,7 +373,7 @@ uuid 0.8.2 — Apache-2.0 OR MIT
   Copyright (c) 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon
 
 widestring 1.2.1 — MIT OR Apache-2.0
-  (no copyright notice in the package)
+  Repository: https://github.com/VoidStarKat/widestring-rs
 
 zerocopy 0.8.63 — BSD-2-Clause OR Apache-2.0 OR MIT
   Copyright 2023 The Fuchsia Authors

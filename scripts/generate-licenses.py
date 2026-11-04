@@ -143,7 +143,11 @@ def main():
             if authors:
                 lines.append(f"  Authors: {authors}")
             else:
-                lines.append("  (no copyright notice in the package)")
+                url = package.get("repository") or package.get("homepage")
+                if url:
+                    lines.append(f"  Repository: {url}")
+                else:
+                    lines.append("  (no copyright notice in the package)")
         lines.append("")
 
     output = ROOT / "licenses" / "COPYRIGHTS.txt"
