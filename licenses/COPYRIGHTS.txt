@@ -1,0 +1,383 @@
+Third-Party Component Notices
+
+This file lists the normal dependencies of the Pivot CLAP binary,
+with copyright notices found in their distributed license files.
+License texts are included below in the Licenses window.
+
+ab_glyph 0.2.32 — Apache-2.0
+  Authors: Alex Butler <alexheretic@gmail.com>
+
+ab_glyph_rasterizer 0.1.10 — Apache-2.0
+  Authors: Alex Butler <alexheretic@gmail.com>
+
+addr2line 0.27.1 — Apache-2.0 OR MIT
+  Copyright (c) 2016-2018 The gimli Developers
+
+adler2 2.0.1 — 0BSD OR MIT OR Apache-2.0
+  Copyright (C) Jonas Schievink <jonasschievink@gmail.com>
+
+ahash 0.8.12 — MIT OR Apache-2.0
+  Copyright (c) 2018 Tom Kaitchuck
+
+anyhow 1.0.104 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+anymap3 1.1.0 — BlueOak-1.0.0 OR MIT OR Apache-2.0
+  Copyright © 2014–2022 Chris Morgan
+
+assert_no_alloc 1.1.2 — BSD-1-Clause
+  Copyright (c) 2020 Florian Jung <flo@windfis.ch>
+
+atomic_float 0.1.0 — Apache-2.0 OR MIT OR Zlib
+  Copyright 2016 The Miri Developers
+  Copyright (c) 2020 Thom Chiovoloni
+
+atomic_refcell 0.1.14 — Apache-2.0 OR MIT
+  Copyright (c) 2022 Bobby Holley
+
+atty 0.2.14 — MIT
+  Copyright (c) 2015-2019 Doug Tangren
+
+backtrace 0.3.77 — MIT OR Apache-2.0
+  Copyright (c) 2014 Alex Crichton
+
+baseview 0.1.0 — MIT OR Apache-2.0
+  Authors: William Light <git@wrl.lhiaudio.com>, Charles Saracco <crsaracco@gmail.com>, Mirko Covizzi <mrkcvzz@gmail.com>, Micah Johnston <micah@glowcoil.com>, Billy Messenger <billydm@protonmail.com>, Anton Lazarev <https://antonok.com>, Joakim Frostegård <joakim.frostegard@gmail.com>, Robbert van der Helm <mail@robbertvanderhelm.nl>
+
+bitflags 1.3.2 — MIT/Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+bitflags 2.13.2 — MIT OR Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+block 0.1.6 — MIT
+  Authors: Steven Sheldon
+
+bytemuck 1.25.2 — Zlib OR Apache-2.0 OR MIT
+  Copyright (c) 2019 Daniel "Lokathor" Gee.
+
+bytemuck_derive 1.12.1 — Zlib OR Apache-2.0 OR MIT
+  Copyright (c) 2019 Daniel "Lokathor" Gee.
+
+cfg-if 1.0.5 — MIT OR Apache-2.0
+  Copyright (c) 2014 Alex Crichton
+
+clap-sys 0.5.0 — MIT/Apache-2.0
+  Authors: Micah Johnston <micah@photophore.systems>, Robbert van der Helm <mail@robbertvanderhelm.nl
+
+cocoa 0.24.1 — MIT / Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+cocoa-foundation 0.1.2 — MIT OR Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+copypasta 0.10.2 — MIT / Apache-2.0
+  Copyright (c) 2017 Avraham Weinstock
+
+core-foundation 0.9.4 — MIT OR Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+core-foundation-sys 0.8.7 — MIT OR Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+core-graphics 0.22.3 — MIT / Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+core-graphics-types 0.1.3 — MIT OR Apache-2.0
+  Copyright (c) 2012-2013 Mozilla Foundation
+
+crossbeam 0.8.5 — MIT OR Apache-2.0
+  Copyright 2019 The Crossbeam Project Developers
+  Copyright (c) 2019 The Crossbeam Project Developers
+
+crossbeam-channel 0.5.17 — MIT OR Apache-2.0
+  Copyright (c) 2019 The Crossbeam Project Developers
+  COPYRIGHT AND/OR OTHER APPLICABLE LAW. ANY USE OF THE WORK OTHER THAN AS
+
+crossbeam-deque 0.8.8 — MIT OR Apache-2.0
+  Copyright (c) 2019 The Crossbeam Project Developers
+
+crossbeam-epoch 0.9.21 — MIT OR Apache-2.0
+  Copyright (c) 2019 The Crossbeam Project Developers
+
+crossbeam-queue 0.3.14 — MIT OR Apache-2.0
+  Copyright (c) 2019 The Crossbeam Project Developers
+
+crossbeam-utils 0.8.23 — MIT OR Apache-2.0
+  Copyright (c) 2019 The Crossbeam Project Developers
+
+dasp 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_envelope 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_frame 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_interpolate 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_peak 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_ring_buffer 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_rms 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_sample 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_signal 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_slice 0.11.0 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+dasp_window 0.11.1 — MIT OR Apache-2.0
+  Authors: mitchmindtree <mitchell.nordine@gmail.com>
+
+deranged 0.5.9 — MIT OR Apache-2.0
+  Copyright 2024 Jacob Pratt et al.
+  Copyright (c) 2024 Jacob Pratt et al.
+
+ecolor 0.31.1 — MIT OR Apache-2.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>, Andreas Reich <reichandreas@gmx.de>
+
+egui 0.31.1 — MIT OR Apache-2.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
+
+egui-baseview 0.5.0 — MIT
+  Copyright (c) 2021 Billy Messenger
+
+egui_glow 0.31.1 — MIT OR Apache-2.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
+
+emath 0.31.1 — MIT OR Apache-2.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
+
+epaint 0.31.1 — MIT OR Apache-2.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
+
+epaint_default_fonts 0.31.1 — (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0
+  Authors: Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
+
+foreign-types 0.3.2 — MIT/Apache-2.0
+  Copyright (c) 2017 The foreign-types Developers
+
+foreign-types-shared 0.1.1 — MIT/Apache-2.0
+  Copyright (c) 2017 The foreign-types Developers
+
+getrandom 0.2.17 — MIT OR Apache-2.0
+  Copyright (c) 2018-2024 The rust-random Project Developers
+  Copyright (c) 2014 The Rust Project Developers
+
+gimli 0.34.0 — MIT OR Apache-2.0
+  Copyright (c) 2015 The Rust Project Developers
+
+glow 0.16.0 — MIT OR Apache-2.0 OR Zlib
+  Authors: Joshua Groves <josh@joshgroves.com>, Dzmitry Malyshau <kvarkus@gmail.com>
+
+itoa 1.0.18 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+keyboard-types 0.6.2 — MIT/Apache-2.0
+  Copyright (c) 2017 Pyfisch
+
+libc 0.2.191 — MIT OR Apache-2.0
+  Copyright (c) The Rust Project Developers
+
+lock_api 0.4.14 — MIT OR Apache-2.0
+  Copyright (c) 2016 The Rust Project Developers
+
+log 0.4.35 — MIT OR Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+malloc_buf 0.0.6 — MIT
+  Authors: Steven Sheldon
+
+memchr 2.8.3 — Unlicense OR MIT
+  Copyright (c) 2015 Andrew Gallant
+
+memoffset 0.9.1 — MIT
+  Copyright (c) 2017 Gilad Naaman
+
+midi-consts 0.1.0 — MIT OR Apache-2.0
+  Authors: Pieter Penninckx <pieter-codeberg-midiconsts@nckx.be>
+
+miniz_oxide 0.9.1 — MIT OR Zlib OR Apache-2.0
+  Copyright 2013-2014 RAD Game Tools and Valve Software
+  Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+  Copyright (c) 2017 Frommi
+  Copyright (c) 2017-2024 oyvindln
+  Copyright (c) 2020 Frommi
+
+nih_log 0.3.1 — ISC
+  Copyright (c) 2023 Robbert van der Helm
+
+nih_plug 0.0.0 — ISC
+  Copyright (c) 2022-2024 Robbert van der Helm
+
+nih_plug_derive 0.1.0 — ISC
+  Authors: Robbert van der Helm <mail@robbertvanderhelm.nl>
+
+nih_plug_egui 0.0.0 — ISC
+  Authors: Robbert van der Helm <mail@robbertvanderhelm.nl>
+
+nohash-hasher 0.2.0 — Apache-2.0 OR MIT
+  Copyright 2018 Parity Technologies (UK) Ltd.
+
+num-complex 0.4.6 — MIT OR Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+num-conv 0.2.2 — MIT OR Apache-2.0
+  Copyright (c) Jacob Pratt
+
+num-integer 0.1.47 — MIT OR Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+num-traits 0.2.19 — MIT OR Apache-2.0
+  Copyright (c) 2014 The Rust Project Developers
+
+num_threads 0.1.8 — MIT OR Apache-2.0
+  Copyright 2021 Jacob Pratt
+  Copyright (c) 2021 Jacob Pratt
+
+objc 0.2.7 — MIT
+  Copyright (c) Steven Sheldon
+
+objc-sys 0.3.5 — MIT
+  Authors: Mads Marquart <mads@marquart.dk>
+
+objc2 0.5.3 — MIT
+  Authors: Steven Sheldon, Mads Marquart <mads@marquart.dk>
+
+objc2-app-kit 0.2.2 — MIT
+  (no copyright notice in the package)
+
+objc2-encode 4.1.0 — MIT
+  Authors: Mads Marquart <mads@marquart.dk>
+
+objc2-foundation 0.2.2 — MIT
+  (no copyright notice in the package)
+
+object 0.40.0 — Apache-2.0 OR MIT
+  Copyright (c) 2015 The Gimli Developers
+
+once_cell 1.21.4 — MIT OR Apache-2.0
+  Authors: Aleksey Kladov <aleksey.kladov@gmail.com>
+
+open 5.4.5 — MIT
+  Copyright © `2015` `Sebastian Thiel`
+
+owned_ttf_parser 0.25.1 — Apache-2.0
+  Authors: Alex Butler <alexheretic@gmail.com>
+
+parking_lot 0.12.5 — MIT OR Apache-2.0
+  Copyright (c) 2016 The Rust Project Developers
+
+parking_lot_core 0.9.12 — MIT OR Apache-2.0
+  Copyright (c) 2016 The Rust Project Developers
+
+powerfmt 0.2.1 — MIT OR Apache-2.0
+  Copyright 2023 Jacob Pratt et al.
+  Copyright (c) 2023 Jacob Pratt et al.
+
+primal-check 0.3.4 — MIT OR Apache-2.0
+  Copyright (c) 2014 Huon Wilson
+
+proc-macro2 1.0.107 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>, Alex Crichton <alex@alexcrichton.com>
+
+profiling 1.0.18 — MIT OR Apache-2.0
+  Authors: Philip Degarmo <aclysma@gmail.com>
+
+quote 1.0.47 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+raw-window-handle 0.5.2 — MIT OR Apache-2.0 OR Zlib
+  Copyright (c) 2019 Osspial
+  Copyright (c) 2020 Osspial
+
+realfft 3.5.1 — MIT
+  Copyright (c) 2020 Henrik Enquist and RealFFT contributors
+
+rustc-demangle 0.1.28 — MIT/Apache-2.0
+  Copyright (c) 2014 Alex Crichton
+
+rustfft 6.4.1 — MIT OR Apache-2.0
+  Copyright (c) 2015 The RustFFT Developers
+
+scopeguard 1.2.0 — MIT OR Apache-2.0
+  Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
+
+serde 1.0.229 — MIT OR Apache-2.0
+  Authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
+
+serde_core 1.0.229 — MIT OR Apache-2.0
+  Authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
+
+serde_derive 1.0.229 — MIT OR Apache-2.0
+  Authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
+
+serde_json 1.0.154 — MIT OR Apache-2.0
+  (no copyright notice in the package)
+
+signalsmith-stretch 0.1.3 — MIT
+  Copyright 2024 Colin Marc <hi@colinmarc.com>
+
+smallvec 1.16.4 — MIT OR Apache-2.0
+  Copyright (c) 2018 The Servo Project Developers
+
+strength_reduce 0.2.4 — MIT OR Apache-2.0
+  Copyright (c) 2015 The RustFFT Developers
+
+syn 1.0.109 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+syn 3.0.9 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+termcolor 1.4.1 — Unlicense OR MIT
+  Copyright (c) 2015 Andrew Gallant
+
+thiserror 2.0.21 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+thiserror-impl 2.0.21 — MIT OR Apache-2.0
+  Authors: David Tolnay <dtolnay@gmail.com>
+
+time 0.3.55 — MIT OR Apache-2.0
+  Copyright (c) Jacob Pratt et al.
+
+time-core 0.1.9 — MIT OR Apache-2.0
+  Copyright (c) Jacob Pratt et al.
+
+time-macros 0.2.32 — MIT OR Apache-2.0
+  Copyright (c) Jacob Pratt et al.
+
+transpose 0.2.3 — MIT OR Apache-2.0
+  Copyright 2022 The transpose developers
+  Copyright (c) 2022 The transpose Developers
+
+ttf-parser 0.25.1 — MIT OR Apache-2.0
+  Copyright (c) 2018 Yevhenii Reizner
+
+unicode-ident 1.0.27 — (MIT OR Apache-2.0) AND Unicode-3.0
+  Copyright © 1991-2023 Unicode, Inc.
+
+uuid 0.8.2 — Apache-2.0 OR MIT
+  Copyright (c) 2014 The Rust Project Developers
+  Copyright (c) 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon
+
+widestring 1.2.1 — MIT OR Apache-2.0
+  (no copyright notice in the package)
+
+zerocopy 0.8.63 — BSD-2-Clause OR Apache-2.0 OR MIT
+  Copyright 2023 The Fuchsia Authors
+  Copyright 2019 The Fuchsia Authors.
+
+zmij 1.0.23 — MIT
+  Authors: David Tolnay <dtolnay@gmail.com>

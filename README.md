@@ -96,9 +96,10 @@ Pivot is open source under the MIT License.
 
 ## Licenses
 
-Pivot is released under the MIT License. The plugin embeds its own license and
-the third-party notices in the editor. Click **Licenses** at the bottom of the
-window to read them. No separate license file is installed with the CLAP bundle.
+Pivot is released under the MIT License. The plugin embeds its own license,
+the third-party notices, the per-component copyright list and the full license
+texts in the editor. Click **Licenses** at the bottom of the window to read
+them. No separate license file is installed with the CLAP bundle.
 
 ## Documentation
 

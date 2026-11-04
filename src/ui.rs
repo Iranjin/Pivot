@@ -244,6 +244,17 @@ pub fn license_window(ctx: &egui::Context, state: &mut PivotUiState) {
                     ui.add_space(4.0);
                     license_body(ui, crate::licenses::THIRD_PARTY_NOTICES);
 
+                    ui.add_space(12.0);
+                    ui.separator();
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new("Component copyright notices")
+                            .strong()
+                            .size(16.0),
+                    );
+                    ui.add_space(4.0);
+                    license_body(ui, crate::licenses::COMPONENT_NOTICES);
+
                     for (title, text) in crate::licenses::ADDITIONAL_LICENSES {
                         ui.add_space(12.0);
                         ui.separator();

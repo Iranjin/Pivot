@@ -1,5 +1,6 @@
 pub const PIVOT_LICENSE: &str = include_str!("../LICENSE");
 pub const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD_PARTY_LICENSES.md");
+pub const COMPONENT_NOTICES: &str = include_str!("../licenses/COPYRIGHTS.txt");
 
 pub const ADDITIONAL_LICENSES: &[(&str, &str)] = &[
     (
