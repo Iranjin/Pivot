@@ -32,9 +32,21 @@ host's generic parameter list and automation.
 
 ## Install
 
+Unzip the release archive and copy the bundle into a CLAP directory:
+
 ```bash
-sudo mkdir -p /Library/Audio/Plug-Ins/CLAP
-sudo cp -R target/bundled/Pivot.clap /Library/Audio/Plug-Ins/CLAP/
+mkdir -p ~/Library/Audio/Plug-Ins/CLAP
+cp -R Pivot.clap ~/Library/Audio/Plug-Ins/CLAP/
+```
+
+For a system-wide install, use `/Library/Audio/Plug-Ins/CLAP` with `sudo`
+instead.
+
+The release is ad-hoc signed, not notarized. If macOS quarantines the bundle,
+remove the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/CLAP/Pivot.clap
 ```
 
 FL Studio 2024.1 or later is required for CLAP support.
@@ -52,11 +64,22 @@ Bundles are written to `target/bundled/`. The release profile uses
 `strip = "none"` because the current macOS linker produces a malformed symbol
 string pool with the default debuginfo stripping.
 
+## Release
+
+```bash
+./scripts/package.sh
+```
+
+This creates `dist/Pivot-1.0.0-macOS-universal.zip`. The bundle is ad-hoc
+signed. Public distribution without Gatekeeper warnings requires a Developer ID
+certificate and notarization.
+
 ## Validation
 
 - `cargo test`: 8 tests pass.
-- CLAP: passes 30 of 44 clap-validator tests. The remaining failures are upstream
-  nih-plug issues with state loading; see `SPEC.md` section 12.4.
+- CLAP: passes 34 of 44 clap-validator tests with 0 failures and 10 skipped.
+  The vendored nih-plug wrapper fixes CLAP state loading and malformed-state
+  handling; see `SPEC.md` section 12.4.
 
 ## Licenses
 

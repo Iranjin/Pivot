@@ -1,7 +1,7 @@
 # Pivot Specification
 
-- Version: 0.1 (draft)
-- Last updated: 2026-11-03
+- Version: 1.0
+- Last updated: 2026-11-04
 - Target: macOS audio pitch-shift CLAP plugin
 - Implementation language: Rust (nih-plug + egui)
 
@@ -375,7 +375,7 @@ Signalsmith Stretch (pitch + formant)
 | Plugin name | Pivot |
 | Vendor | Iranjin |
 | CLAP ID | `com.iranjin.pivot` |
-| Version | 0.1.0 (development), 1.0.0 (release) |
+| Version | 1.0.0 |
 
 ### 8.2 Buses / events
 
@@ -529,11 +529,11 @@ cargo xtask bundle-universal pivot --release
 ### 11.2 Release
 
 1. Pass `cargo test` / `cargo clippy`
-2. `cargo xtask bundle-universal pivot --release`
-3. Code-sign (Developer ID Application)
-4. Notarize with `notarytool`
+2. `./scripts/package.sh`
+3. Validate with clap-validator
+4. For public distribution, code-sign with a Developer ID Application
+   certificate and notarize with `notarytool`
 5. Create a `.dmg` and attach the ticket with `stapler`
-6. Validate with clap-validator
 
 ### 11.3 CI
 
@@ -576,15 +576,12 @@ cargo xtask bundle-universal pivot --release
 
 ### 12.4 Known validation exceptions
 
-- CLAP state load: nih-plug's CLAP wrapper does not request a parameter value rescan
-  after loading state through the host state extension. This is an upstream
-  nih-plug issue.
-- CLAP malformed state: nih-plug's CLAP wrapper trusts the length prefix in the
-  state stream, so malformed state can trigger a large allocation. Hosts write
-  valid state, so this only affects fuzzing and corrupted files. This is an
-  upstream nih-plug issue.
-- clap-validator passes 30 of 44 tests; the remaining failures are the upstream
-  state issues above.
+- The vendored nih-plug CLAP wrapper requests a parameter value rescan after
+  loading host state, so parameter changes are reflected without a host-side
+  rescan.
+- The vendored wrapper rejects state streams larger than 16 MiB before
+  allocating, preventing malformed state from causing an allocation failure.
+- clap-validator passes 34 of 44 tests with 0 failures and 10 skipped tests.
 
 ### 12.5 Acceptance criteria (v1.0)
 
